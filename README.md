@@ -9,8 +9,8 @@
 | **Members** | Kanishka ([@kanishka2100](https://github.com/kanishka2100)) |
 | **Track / Problem Statement** | FoodoScope Hackathon Track — Intelligent Culinary Substitution & Smart Cooking Assistant |
 | **FoodoScope APIs Used** | ☑ RecipeDB · ☑ FlavorDB |
-| **Live Demo (GitHub Pages)** | [https://Fork-IT-2026-Esya.github.io/forkit26-t46-techtadka/](https://Fork-IT-2026-Esya.github.io/forkit26-t46-techtadka/) |
-| **Alternative Live Mirror** | [https://kanishka2100.github.io/Project/](https://kanishka2100.github.io/Project/) |
+| **Live Working Demo** | [https://kanishka2100.github.io/forkit26-t46-techtadka/](https://kanishka2100.github.io/forkit26-t46-techtadka/) |
+| **Hackathon Repository** | [https://github.com/Fork-IT-2026-Esya/forkit26-t46-techtadka](https://github.com/Fork-IT-2026-Esya/forkit26-t46-techtadka) |
 
 ---
 
