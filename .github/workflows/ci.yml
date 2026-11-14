@@ -18,7 +18,9 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest fastapi httpx pydantic pydantic-settings
+          pip install pytest pytest-asyncio fastapi httpx pydantic pydantic-settings python-dotenv jinja2
       - name: Run Test Suite
+        env:
+          PYTHONPATH: .
         run: |
-          pytest -v
+          pytest backend/tests/ -v
