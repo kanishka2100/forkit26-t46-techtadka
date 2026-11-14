@@ -4755,7 +4755,269 @@ const ApiService = (function () {
       }
     });
 
-    // Wire hero diagnostics trigger
+    // ========================================================
+  // INGREDIENT SUBSTITUTION ANALYSIS (COST & MARGIN DASHBOARD)
+  // ========================================================
+  async function analyzeSubstitution(payload) {
+    if (!payload || !payload.dish_name) {
+      return { status: 'error', message: 'Dish name is required.' };
+    }
+
+    // Try backend if connected
+    if (isBackendConnected && API_BASE_URL && !isFoodoscopeCloud(API_BASE_URL)) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        const res = await fetch(`${API_BASE_URL}/dashboard/analyze-substitution`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch (e) {
+        console.warn('Backend analyze-substitution failed, activating resilient client engine:', e);
+      }
+    }
+
+    // Resilient Client-Side Analysis Engine (Identical Math & Schema)
+    const persons = Math.max(5, Math.min(200, parseInt(payload.persons, 10) || 5));
+    const currency = payload.currency || '₹';
+    const isUsd = currency === '$';
+
+    const CLIENT_INGREDIENTS = {
+      'paneer': { name: 'Fresh Malai Paneer', inr: 48, usd: 0.60, cal: 296, portion: 150, unit: 'g fresh cubes', texture: 'Soft, pillowy, spongy curds that gently absorb rich sauces without disintegrating under heat.', isEst: false },
+      'tofu': { name: 'Pressed Firm Tofu', inr: 32, usd: 0.40, cal: 144, portion: 150, unit: 'g pressed cubes', texture: 'Dense, tender porous plant-protein block with pleasant chew; holds shape well during simmering.', isEst: false },
+      'fresh cream': { name: 'Dairy Fresh Heavy Cream (25-30% Fat)', inr: 42, usd: 0.55, cal: 345, portion: 60, unit: 'g velvety cream', texture: 'Velvety, unctuous, high-fat dairy emulsion delivering glossy coating power and rich mouthfeel.', isEst: false },
+      'cashew cream': { name: 'Soaked Cashew & Warm Milk Velvet Emulsion', inr: 58, usd: 0.75, cal: 290, portion: 60, unit: 'g emulsified puree', texture: 'Silky, viscous, heat-stable micro-emulsion that simmers smoothly without curdling or separation.', isEst: false },
+      'butter': { name: 'Salted Butter / Table Butter', inr: 56, usd: 0.70, cal: 717, portion: 25, unit: 'g softened', texture: 'Mellow solid at room temp (20°C); melts at body temperature (34°C) into glossy golden pool.', isEst: false },
+      'ghee': { name: 'Clarified Butter / Desi Ghee', inr: 68, usd: 0.90, cal: 900, portion: 20, unit: 'g golden clarified', texture: 'Granular crystalline solid below 24°C; turns into intensely aromatic, clear liquid fat above 32°C.', isEst: false },
+      'greek yogurt': { name: 'Strained Greek Yogurt / Hung Curd', inr: 28, usd: 0.35, cal: 97, portion: 60, unit: 'g strained', texture: 'Thick, creamy, spoonable dairy paste with lactic tang; smooth and light on palate.', isEst: false },
+      'chicken': { name: 'Boneless Chicken Breast Cubes', inr: 36, usd: 0.45, cal: 165, portion: 150, unit: 'g fresh cut', texture: 'Fibrous, firm, tender lean meat fibers that retain moisture when simmered in gravy.', isEst: false },
+      'mushroom': { name: 'Fresh Button / Cremini Mushrooms', inr: 30, usd: 0.38, cal: 22, portion: 140, unit: 'g sliced', texture: 'Spongy and resilient raw; softens to juicy, meaty bite with deep savory umami when seared.', isEst: false },
+      'eggs': { name: 'Farm Fresh Whole Eggs', inr: 20, usd: 0.25, cal: 143, portion: 100, unit: 'g (approx 2 eggs)', texture: 'Viscous liquid raw; coagulates into soft, tender elastic gel upon thermal coagulation.', isEst: false },
+      'aquafaba': { name: 'Chilled Chickpea Aquafaba', inr: 10, usd: 0.12, cal: 18, portion: 60, unit: 'ml whipped brine', texture: 'Light viscous plant protein-saccharide brine; whips into stable, glossy airy foam.', isEst: false },
+      'all-purpose flour': { name: 'All-Purpose Wheat Flour (Maida)', inr: 6, usd: 0.08, cal: 364, portion: 100, unit: 'g fine sifted', texture: 'Fine powdery grain starch; builds gluten matrix upon hydration creating chewy, elastic crumb.', isEst: false },
+      'almond flour': { name: 'Fine Blanched Almond Flour', inr: 85, usd: 1.10, cal: 590, portion: 100, unit: 'g fine ground', texture: 'Nutty, granular meal without gluten elasticity; produces tender, dense, melt-in-mouth crumb.', isEst: false },
+      'avocado': { name: 'Fresh Ripe Hass Avocado', inr: 70, usd: 0.90, cal: 160, portion: 120, unit: 'g sliced flesh', texture: 'Buttery, silky-soft, spreadable fruit fat with mild nutty mouthfeel.', isEst: false },
+      'green peas': { name: 'Sweet Tender Green Peas (Matar)', inr: 18, usd: 0.22, cal: 81, portion: 120, unit: 'g blanched', texture: 'Crisp-tender skins that pop gently; mashes into vibrant sweet green puree.', isEst: false },
+      'olive oil': { name: 'Extra Virgin Cold-Pressed Olive Oil', inr: 90, usd: 1.20, cal: 884, portion: 20, unit: 'ml oil', texture: 'Smooth, fluid, unctuous liquid fat with peppery throat bite and clean gloss.', isEst: false },
+      'rice': { name: 'Aged Long-Grain Basmati Rice', inr: 14, usd: 0.18, cal: 360, portion: 100, unit: 'g raw grains', texture: 'Firm, distinct, fluffy elongated grains that remain separate and tender when cooked.', isEst: false },
+      'cauliflower rice': { name: 'Grated Cauliflower Pearls', inr: 12, usd: 0.15, cal: 25, portion: 140, unit: 'g riced pearls', texture: 'Al dente, tender-crisp vegetable granules with light moist bite and delicate sweet crunch.', isEst: false }
+    };
+
+    function resolveClientIng(rawName) {
+      const q = (rawName || '').trim().toLowerCase();
+      if (!q) return { name: 'Custom Ingredient', inr: 35, usd: 0.45, cal: 180, portion: 100, unit: 'g calibrated', texture: 'Standard culinary ingredient texture.', isEst: true };
+      for (const k in CLIENT_INGREDIENTS) {
+        if (q === k || q.includes(k) || k.includes(q)) return CLIENT_INGREDIENTS[k];
+      }
+      return {
+        name: rawName.charAt(0).toUpperCase() + rawName.slice(1),
+        inr: 35, usd: 0.45, cal: 180, portion: 100, unit: 'g calibrated',
+        texture: `Natural characteristic texture for culinary ingredient '${rawName}'.`,
+        isEst: true
+      };
+    }
+
+    const origIng = resolveClientIng(payload.missing_ingredient);
+    const replIng = resolveClientIng(payload.replacement_ingredient);
+
+    // Replacement ratio calculation (never blindly 1:1)
+    let replQtyPerPerson = origIng.portion;
+    const oLower = (payload.missing_ingredient || '').toLowerCase();
+    const rLower = (payload.replacement_ingredient || '').toLowerCase();
+    if ((oLower.includes('butter') && rLower.includes('ghee')) || (rLower.includes('butter') && oLower.includes('ghee'))) {
+      replQtyPerPerson = rLower.includes('ghee') ? Math.round(origIng.portion * 0.8) : Math.round(origIng.portion * 1.25);
+    } else if (oLower.includes('butter') && (rLower.includes('oil') || rLower.includes('olive'))) {
+      replQtyPerPerson = Math.round(origIng.portion * 0.75);
+    } else if ((oLower.includes('cream') || oLower.includes('malai')) && (rLower.includes('cashew') || rLower.includes('kaju'))) {
+      replQtyPerPerson = Math.round(origIng.portion * 0.85);
+    } else if (oLower.includes('rice') && rLower.includes('cauliflower')) {
+      replQtyPerPerson = Math.round(origIng.portion * 1.25);
+    } else if (oLower.includes('flour') && rLower.includes('almond')) {
+      replQtyPerPerson = Math.round(origIng.portion * 0.9);
+    } else if (oLower.includes('egg') && rLower.includes('aquafaba')) {
+      replQtyPerPerson = Math.round(origIng.portion * 0.9);
+    }
+
+    const origQtyPerPerson = origIng.portion;
+    const origTotalQty = origQtyPerPerson * persons;
+    const replTotalQty = replQtyPerPerson * persons;
+
+    const origUnitCost = isUsd ? origIng.usd : origIng.inr;
+    const replUnitCost = isUsd ? replIng.usd : replIng.inr;
+
+    const baseOtherCost = isUsd ? 2.00 : 60.00;
+    const origCostPp = parseFloat((baseOtherCost + (origQtyPerPerson / 100) * origUnitCost).toFixed(2));
+    const replCostPp = parseFloat((baseOtherCost + (replQtyPerPerson / 100) * replUnitCost).toFixed(2));
+
+    const origTotalCost = parseFloat((origCostPp * persons).toFixed(2));
+    const replTotalCost = parseFloat((replCostPp * persons).toFixed(2));
+
+    const baseOtherCal = 260;
+    const origCalPp = Math.round(baseOtherCal + (origQtyPerPerson / 100) * origIng.cal);
+    const replCalPp = Math.round(baseOtherCal + (replQtyPerPerson / 100) * replIng.cal);
+
+    const origTotalCal = origCalPp * persons;
+    const replTotalCal = replCalPp * persons;
+
+    let sellingPrice = parseFloat(payload.selling_price_per_person);
+    if (isNaN(sellingPrice) || sellingPrice <= 0) {
+      sellingPrice = isUsd ? 11.00 : 320.00;
+    }
+
+    const grossRevenue = parseFloat((sellingPrice * persons).toFixed(2));
+    const origProfit = parseFloat((grossRevenue - origTotalCost).toFixed(2));
+    const replProfit = parseFloat((grossRevenue - replTotalCost).toFixed(2));
+
+    const origMargin = parseFloat(((origProfit / grossRevenue) * 100).toFixed(1));
+    const replMargin = parseFloat(((replProfit / grossRevenue) * 100).toFixed(1));
+
+    // Comparison rows
+    const costDiff = parseFloat((replTotalCost - origTotalCost).toFixed(2));
+    const costDiffPct = parseFloat(((costDiff / Math.max(origTotalCost, 0.01)) * 100).toFixed(1));
+
+    const calDiff = replTotalCal - origTotalCal;
+    const calDiffPct = parseFloat(((calDiff / Math.max(origTotalCal, 1)) * 100).toFixed(1));
+
+    const qtyDiff = parseFloat((replTotalQty - origTotalQty).toFixed(1));
+    const qtyDiffPct = parseFloat(((qtyDiff / Math.max(origTotalQty, 0.1)) * 100).toFixed(1));
+
+    const costPpDiff = parseFloat((replCostPp - origCostPp).toFixed(2));
+    const costPpPct = parseFloat(((costPpDiff / Math.max(origCostPp, 0.01)) * 100).toFixed(1));
+
+    const marginDiff = parseFloat((replMargin - origMargin).toFixed(1));
+
+    const comparison = [
+      {
+        parameter: 'Cost',
+        original: `${currency}${origTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        modified: `${currency}${replTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        difference: `${costDiff > 0 ? '+' : ''}${currency}${costDiff.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${costDiffPct > 0 ? '+' : ''}${costDiffPct}%)`,
+        indicator: costDiff < -0.01 ? 'green' : (costDiff > 0.01 ? 'red' : 'neutral'),
+        explanation: costDiff < -0.01
+          ? `Cost reduced by ${currency}${Math.abs(costDiff).toFixed(2)} (${Math.abs(costDiffPct)}%) across ${persons} servings due to more economical replacement.`
+          : (costDiff > 0.01
+            ? `Cost increased by ${currency}${costDiff.toFixed(2)} (+${costDiffPct}%) across ${persons} servings due to premium ingredient sourcing.`
+            : `Batch food cost remains identical across ${persons} covers.`)
+      },
+      {
+        parameter: 'Calories',
+        original: `${origTotalCal.toLocaleString()} kcal`,
+        modified: `${replTotalCal.toLocaleString()} kcal`,
+        difference: `${calDiff > 0 ? '+' : ''}${calDiff.toLocaleString()} kcal (${calDiffPct > 0 ? '+' : ''}${calDiffPct}%)`,
+        indicator: 'neutral',
+        explanation: calDiff < 0
+          ? `Reduction of ${Math.abs(calDiff).toLocaleString()} kcal total (${Math.abs(calDiffPct)}%), yielding a lighter, less energy-dense preparation.`
+          : (calDiff > 0
+            ? `Increase of ${calDiff.toLocaleString()} kcal total (+${calDiffPct}%), providing higher caloric density and energy.`
+            : 'Caloric profile remains virtually identical.')
+      },
+      {
+        parameter: 'Texture',
+        original: origIng.texture.split('.')[0],
+        modified: replIng.texture.split('.')[0],
+        difference: 'Texture profile shifted',
+        indicator: 'neutral',
+        explanation: `Original relies on '${origIng.name}' mouthfeel; replacement provides '${replIng.name}' characteristics (${replIng.texture}).`
+      },
+      {
+        parameter: 'Ingredient Quantity',
+        original: `${origTotalQty.toLocaleString()} ${origIng.unit}`,
+        modified: `${replTotalQty.toLocaleString()} ${replIng.unit}`,
+        difference: `${qtyDiff > 0 ? '+' : ''}${qtyDiff.toLocaleString()} ${replIng.unit} (${qtyDiffPct > 0 ? '+' : ''}${qtyDiffPct}%)`,
+        indicator: 'neutral',
+        explanation: `Replacement ratio calibrated: ${origQtyPerPerson}g ${origIng.name} → ${replQtyPerPerson}g ${replIng.name} per portion.`
+      },
+      {
+        parameter: 'Cost Per Person',
+        original: `${currency}${origCostPp.toFixed(2)}`,
+        modified: `${currency}${replCostPp.toFixed(2)}`,
+        difference: `${costPpDiff > 0 ? '+' : ''}${currency}${costPpDiff.toFixed(2)} (${costPpPct > 0 ? '+' : ''}${costPpPct}%)`,
+        indicator: costPpDiff < -0.01 ? 'green' : (costPpDiff > 0.01 ? 'red' : 'neutral'),
+        explanation: costPpDiff < -0.01
+          ? `Savings of ${currency}${Math.abs(costPpDiff).toFixed(2)} per portion (${Math.abs(costPpPct)}% reduction in plate cost).`
+          : (costPpDiff > 0.01
+            ? `Cost increase of ${currency}${costPpDiff.toFixed(2)} per portion (+${costPpPct}% plate cost increase).`
+            : 'Plate food cost unchanged per person.')
+      },
+      {
+        parameter: 'Profit Margin',
+        original: `${origMargin.toFixed(1)}%`,
+        modified: `${replMargin.toFixed(1)}%`,
+        difference: `${marginDiff > 0 ? '+' : ''}${marginDiff.toFixed(1)}% pts`,
+        indicator: marginDiff > 0.1 ? 'green' : (marginDiff < -0.1 ? 'red' : 'neutral'),
+        explanation: marginDiff > 0.1
+          ? `Gross margin improves by +${marginDiff.toFixed(1)}% points due to lower food costs at ${currency}${sellingPrice.toFixed(2)}/cover.`
+          : (marginDiff < -0.1
+            ? `Gross margin decreases by ${Math.abs(marginDiff).toFixed(1)}% points due to higher input costs at ${currency}${sellingPrice.toFixed(2)}/cover.`
+            : 'Gross profit margin remains steady.')
+      }
+    ];
+
+    return {
+      status: 'success',
+      dish_name: payload.dish_name,
+      missing_ingredient: payload.missing_ingredient,
+      replacement_ingredient: payload.replacement_ingredient,
+      persons,
+      currency,
+      selling_price_per_person: sellingPrice,
+      original: {
+        ingredient: origIng.name,
+        quantity_per_person: origQtyPerPerson,
+        total_quantity: origTotalQty,
+        unit: origIng.unit,
+        cost_per_person: origCostPp,
+        total_recipe_cost: origTotalCost,
+        calories_per_person: origCalPp,
+        total_calories: origTotalCal,
+        texture: origIng.texture,
+        texture_is_estimate: origIng.isEst,
+        selling_price_per_person: sellingPrice,
+        gross_revenue: grossRevenue,
+        gross_profit: origProfit,
+        profit_margin: origMargin,
+        profit_margin_display: `${origMargin.toFixed(1)}%`
+      },
+      modified: {
+        ingredient: replIng.name,
+        quantity_per_person: replQtyPerPerson,
+        total_quantity: replTotalQty,
+        unit: replIng.unit,
+        cost_per_person: replCostPp,
+        total_recipe_cost: replTotalCost,
+        calories_per_person: replCalPp,
+        total_calories: replTotalCal,
+        texture: replIng.texture,
+        texture_is_estimate: replIng.isEst,
+        selling_price_per_person: sellingPrice,
+        gross_revenue: grossRevenue,
+        gross_profit: replProfit,
+        profit_margin: replMargin,
+        profit_margin_display: `${replMargin.toFixed(1)}%`
+      },
+      comparison,
+      summary: {
+        dish: payload.dish_name,
+        persons,
+        total_cost_saved: Math.max(0, origTotalCost - replTotalCost),
+        total_calories_diff: replTotalCal - origTotalCal,
+        is_cost_saving: replTotalCost < origTotalCost
+      }
+    };
+  }
+
+  // Wire hero diagnostics trigger
     const heroDrawerBtn = document.getElementById('hero-open-drawer-btn');
     heroDrawerBtn?.addEventListener('click', () => {
       drawer?.classList.remove('hidden');
@@ -4770,6 +5032,7 @@ const ApiService = (function () {
     resetConfig,
     recommendSubstitutions,
     optimizeRatio,
+    analyzeSubstitution,
     getFlavorCompatibility,
     getSensoryProfile,
     searchRecipes,

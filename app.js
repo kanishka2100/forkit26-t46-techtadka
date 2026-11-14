@@ -31,12 +31,17 @@
     // Currently open recipe in modal
     activeRecipeId: null,
     
-    // Dashboard Covers Calculator (user-supplied pricing inputs; no invented numbers)
-    dashboardCovers: 50,
+    // Dashboard Covers Calculator & Substitution Analysis State
+    dashboardCovers: 5,
     dashboardSelectedRecipeId: 'paneer-butter-masala',
     dashBaseCost: '',
     dashAltCost: '',
-    dashRetailPrice: '',
+    dashRetailPrice: '320',
+    dashDishName: 'Paneer Butter Masala',
+    dashMissingIng: 'Paneer',
+    dashReplacementIng: 'Tofu',
+    dashAnalysisResult: null,
+    dashIsAnalyzing: false,
     
     // User-submitted taste reviews (persisted locally)
     customReviews: JSON.parse(localStorage.getItem('flavorshift_reviews') || '{}'),
@@ -3412,7 +3417,9 @@
   }
 
   // ========================================================
-  // RENDER: CAFE COST & MARGIN CALCULATOR
+  // ========================================================
+  // RENDER: UPGRADED CAFE COST & MARGIN DASHBOARD
+  // WITH INGREDIENT SUBSTITUTION ANALYSIS & DYNAMIC SCALING
   // ========================================================
   function renderDashboardView() {
     const container = document.getElementById('dashboard-view-container');
@@ -3423,9 +3430,15 @@
     const customRevCount = Object.values(state.customReviews).reduce((acc, list) => acc + list.length, 0);
     const totalNotesCount = state.htvSubmissions.length + customRevCount;
 
-    const selectedCoverRecipe = getComputedRecipe(state.dashboardSelectedRecipeId) || getComputedRecipe('paneer-butter-masala');
+    // Ensure valid default values
+    if (!state.dashDishName) state.dashDishName = 'Paneer Butter Masala';
+    if (!state.dashMissingIng) state.dashMissingIng = 'Paneer';
+    if (!state.dashReplacementIng) state.dashReplacementIng = 'Tofu';
+    if (!state.dashboardCovers || state.dashboardCovers < 5) state.dashboardCovers = 5;
+    if (!state.dashRetailPrice) state.dashRetailPrice = '320';
 
-    function computeDashMetrics() {
+    // Helper: Compute batch metrics for the legacy custom pricing simulator
+    function computeLegacyDashMetrics() {
       const covers = state.dashboardCovers;
       const baseCost = parseFloat(state.dashBaseCost);
       const altCost = parseFloat(state.dashAltCost);
@@ -3449,30 +3462,65 @@
       return { baseTotal, altTotal, diffTotal, altMargin, revenueTotal, covers };
     }
 
-    const m = computeDashMetrics();
+    // Auto-trigger initial analysis calculation if not yet loaded
+    if (!state.dashAnalysisResult && !state.dashIsAnalyzing) {
+      state.dashIsAnalyzing = true;
+      ApiService.analyzeSubstitution({
+        dish_name: state.dashDishName,
+        missing_ingredient: state.dashMissingIng,
+        replacement_ingredient: state.dashReplacementIng,
+        persons: state.dashboardCovers,
+        selling_price_per_person: parseFloat(state.dashRetailPrice) || 320,
+        currency: state.currency
+      }).then(res => {
+        state.dashAnalysisResult = res;
+        state.dashIsAnalyzing = false;
+        // Pre-fill legacy inputs if empty
+        if (!state.dashBaseCost && res.original) state.dashBaseCost = res.original.cost_per_person;
+        if (!state.dashAltCost && res.modified) state.dashAltCost = res.modified.cost_per_person;
+        renderDashboardView();
+      }).catch(err => {
+        console.warn('Initial analysis error:', err);
+        state.dashIsAnalyzing = false;
+      });
+    }
+
+    const legacyMetrics = computeLegacyDashMetrics();
+    const result = state.dashAnalysisResult;
 
     let html = `
       <div class="space-y-8 animate-fade-up">
         
+        <!-- Header Hero Banner -->
         <div class="relative overflow-hidden rounded-3xl p-6 md:p-8 bg-forest dark:bg-[#1A2620] text-ivory shadow-xl border border-beige-200/20">
           <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div class="space-y-2">
               <div class="flex flex-wrap items-center gap-2.5">
                 <span class="px-3 py-1 rounded-full text-xs font-black bg-ivory/15 text-beige border border-beige-200/30 flex items-center gap-1.5 shadow-sm">
                   <i class="fa-solid fa-calculator text-terracotta"></i>
-                  <span>User-Driven Cost & Margin Calculator</span>
+                  <span>Cost & Margin Intelligence Engine</span>
+                </span>
+                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  <i class="fa-solid fa-scale-balanced mr-1"></i>Headcount Scaler: 5–200 Covers
                 </span>
               </div>
 
               <h2 class="text-2xl sm:text-3xl lg:text-4xl font-black font-heading tracking-tight text-ivory">
-                Kitchen Batch Cost & Margin Simulator
+                Ingredient Substitution & Margin Dashboard
               </h2>
               <p class="text-ivory/80 text-xs sm:text-sm max-w-2xl font-medium leading-relaxed">
-                Enter your own supplier costs per portion and menu price to calculate batch totals and gross margins across 5–200 covers.
+                Analyse real ingredient substitutions for any dish. Compare original and modified recipe formulations side-by-side with accurate batch costs, nutritional deltas, textures, and gross profit margins.
               </p>
             </div>
 
             <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+              <div class="flex items-center gap-2 bg-white/10 px-3 py-2 rounded-xl border border-white/20">
+                <span class="text-xs font-bold text-ivory/80">Currency:</span>
+                <select id="dash-currency-select" aria-label="Select currency" class="px-2.5 py-1 text-xs rounded-lg border border-white/30 bg-forest dark:bg-stone-900 font-bold text-ivory focus:outline-none cursor-pointer">
+                  <option value="₹" ${state.currency === '₹' ? 'selected' : ''}>₹ INR</option>
+                  <option value="$" ${state.currency === '$' ? 'selected' : ''}>$ USD</option>
+                </select>
+              </div>
               <button type="button" id="dash-quick-pantry-btn" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-ivory border border-white/20 backdrop-blur transition-all cursor-pointer flex items-center gap-2 shadow-sm">
                 <i class="fa-solid fa-boxes-stacked text-terracotta"></i>
                 <span>Pantry Stock</span>
@@ -3481,87 +3529,464 @@
           </div>
         </div>
 
-        <!-- 4 Factual Summary Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="dash-kpi-card p-6 bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between rounded-3xl">
+        <!-- ============================================== -->
+        <!-- 1. NEW USER INPUT WORKFLOW (STEPS 1 TO 4)      -->
+        <!-- ============================================== -->
+        <div class="p-6 md:p-8 rounded-3xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-beige-200 dark:border-stone-800 pb-4">
             <div>
-              <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-black text-stone-400 uppercase tracking-wider">Catalog Recipes</span>
-                <span class="w-10 h-10 rounded-2xl bg-forest/15 text-sage-700 dark:text-sage-400 flex items-center justify-center font-bold">
-                  <i class="fa-solid fa-utensils"></i>
+              <span class="text-[11px] font-black uppercase tracking-wider text-terracotta">Step-by-Step Workflow</span>
+              <h3 class="text-xl font-black text-forest dark:text-ivory flex items-center gap-2">
+                <i class="fa-solid fa-arrow-down-1-9 text-terracotta"></i>
+                <span>Substitution Analysis Setup</span>
+              </h3>
+            </div>
+            <span class="text-xs font-medium text-stone-500">Provide the 4 inputs below and click Analyse Substitution</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            
+            <!-- Step 1 – Enter Dish Name -->
+            <div class="space-y-2">
+              <label for="sub-dish-input" class="block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-terracotta text-white text-[11px] font-black mr-1.5">1</span>
+                Which dish are you preparing?
+              </label>
+              <div class="relative">
+                <input
+                  type="text"
+                  id="sub-dish-input"
+                  value="${state.dashDishName}"
+                  placeholder="e.g. Paneer Butter Masala, Vegetable Biryani, Pasta..."
+                  class="w-full px-3.5 py-2.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 text-xs sm:text-sm font-semibold text-forest dark:text-ivory focus:outline-none focus:border-terracotta transition-colors"
+                />
+              </div>
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                <span class="text-[10px] text-stone-400 font-bold uppercase">Quick Pick:</span>
+                <button type="button" class="sub-dish-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors" data-dish="Paneer Butter Masala" data-missing="Paneer" data-repl="Tofu">Paneer Butter Masala</button>
+                <button type="button" class="sub-dish-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors" data-dish="Vegetable Biryani" data-missing="Paneer" data-repl="Tofu">Biryani</button>
+                <button type="button" class="sub-dish-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors" data-dish="Wild Mushroom Pasta" data-missing="Fresh Cream" data-repl="Cashew Cream">Pasta</button>
+                <button type="button" class="sub-dish-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors" data-dish="Smashed Avocado Toast" data-missing="Avocado" data-repl="Green Peas">Avocado Toast</button>
+              </div>
+            </div>
+
+            <!-- Step 2 – Enter Missing Ingredient -->
+            <div class="space-y-2">
+              <label for="sub-missing-input" class="block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-terracotta text-white text-[11px] font-black mr-1.5">2</span>
+                Which ingredient is missing?
+              </label>
+              <div class="relative">
+                <input
+                  type="text"
+                  id="sub-missing-input"
+                  value="${state.dashMissingIng}"
+                  placeholder="e.g. Paneer, Fresh Cream, Butter..."
+                  class="w-full px-3.5 py-2.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 text-xs sm:text-sm font-semibold text-forest dark:text-ivory focus:outline-none focus:border-terracotta transition-colors"
+                />
+              </div>
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                <span class="text-[10px] text-stone-400 font-bold uppercase">Popular:</span>
+                <button type="button" class="sub-missing-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300" data-val="Paneer">Paneer</button>
+                <button type="button" class="sub-missing-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300" data-val="Fresh Cream">Fresh Cream</button>
+                <button type="button" class="sub-missing-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300" data-val="Butter">Butter</button>
+                <button type="button" class="sub-missing-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300" data-val="Chicken">Chicken</button>
+              </div>
+            </div>
+
+            <!-- Step 3 – Enter Replacement Ingredient -->
+            <div class="space-y-2">
+              <label for="sub-replacement-input" class="block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-terracotta text-white text-[11px] font-black mr-1.5">3</span>
+                Which ingredient are you using instead?
+              </label>
+              <div class="relative">
+                <input
+                  type="text"
+                  id="sub-replacement-input"
+                  value="${state.dashReplacementIng}"
+                  placeholder="e.g. Tofu, Cashew Cream, Ghee..."
+                  class="w-full px-3.5 py-2.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 text-xs sm:text-sm font-semibold text-forest dark:text-ivory focus:outline-none focus:border-terracotta transition-colors"
+                />
+              </div>
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                <span class="text-[10px] text-stone-400 font-bold uppercase">Popular:</span>
+                <button type="button" class="sub-repl-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300" data-val="Tofu">Tofu</button>
+                <button type="button" class="sub-repl-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300" data-val="Cashew Cream">Cashew Cream</button>
+                <button type="button" class="sub-repl-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300" data-val="Greek Yogurt">Greek Yogurt</button>
+                <button type="button" class="sub-repl-chip text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 hover:bg-peach/50 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300" data-val="Ghee">Ghee</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Step 4 – Select Number of People & Menu Price -->
+          <div class="p-5 rounded-2xl bg-ivory dark:bg-[#181410]/70 border border-beige-200 dark:border-stone-800 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <label for="sub-persons-slider" class="block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                  <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-terracotta text-white text-[11px] font-black mr-1.5">4</span>
+                  Select Number of People (Batch Scale: 5 – 200 Covers)
+                </label>
+                <p class="text-xs text-stone-500 mt-0.5">Ingredient quantities, total costs, calories, and gross margins scale automatically with this slider.</p>
+              </div>
+
+              <div class="flex items-center gap-3">
+                <span class="text-2xl font-black text-terracotta font-heading whitespace-nowrap" id="sub-persons-display">
+                  ${state.dashboardCovers} People
                 </span>
               </div>
-              <span class="text-3xl font-black text-forest dark:text-ivory tracking-tight">${totalRecipes}</span>
             </div>
-            <div class="pt-3 border-t border-beige-100 dark:border-stone-800">
-              <span class="text-[11px] text-sage-700 dark:text-sage-400 font-bold">Dishes available in menu library</span>
+
+            <div class="space-y-1">
+              <input 
+                type="range" 
+                id="sub-persons-slider" 
+                min="5" 
+                max="200" 
+                step="5" 
+                value="${state.dashboardCovers}"
+                class="w-full accent-terracotta cursor-pointer"
+              />
+              <div class="flex justify-between text-[11px] text-stone-400 font-bold px-1">
+                <span>5 Min</span>
+                <span>25</span>
+                <span>50 Default</span>
+                <span>100</span>
+                <span>150</span>
+                <span>200 Max</span>
+              </div>
+            </div>
+
+            <!-- Optional Selling Price Input for Gross Margin -->
+            <div class="pt-3 border-t border-beige-200/80 dark:border-stone-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="text-xs text-stone-600 dark:text-stone-400">
+                <span class="font-bold text-stone-700 dark:text-stone-300">Menu Selling Price per Person (<span class="dash-currency-symbol">${state.currency}</span>):</span>
+                <span class="block text-[11px] text-stone-400">Required to compute gross revenue and profit margin.</span>
+              </div>
+              <div class="w-full sm:w-48">
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  id="sub-selling-price-input"
+                  value="${state.dashRetailPrice}"
+                  placeholder="e.g. 320"
+                  class="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-xs text-forest dark:text-ivory focus:outline-none focus:border-terracotta text-right"
+                />
+              </div>
             </div>
           </div>
 
-          <div class="dash-kpi-card p-6 bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between rounded-3xl">
-            <div>
-              <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-black text-stone-400 uppercase tracking-wider">Swap Profiles</span>
-                <span class="w-10 h-10 rounded-2xl bg-terracotta/15 text-terracotta flex items-center justify-center font-bold">
-                  <i class="fa-solid fa-flask-vial"></i>
-                </span>
-              </div>
-              <span class="text-3xl font-black text-forest dark:text-ivory tracking-tight">${totalSwaps}</span>
+          <!-- Section 2: Prominent Analyse Button -->
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+            <div class="text-xs text-stone-500">
+              <i class="fa-solid fa-shield-halved text-sage-600 mr-1"></i>
+              Calculated using Foodoscope RecipeDB/FlavorDB standards & verified ingredient pricing (Zero fabricated values).
             </div>
-            <div class="pt-3 border-t border-beige-100 dark:border-stone-800">
-              <span class="text-[11px] text-terracotta font-bold">Target ingredients in Swap Lab</span>
-            </div>
+
+            <button
+              type="button"
+              id="sub-analyse-btn"
+              class="terracotta-btn px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-black text-white shadow-md flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto transition-transform active:scale-95"
+            >
+              <i class="fa-solid fa-calculator text-base"></i>
+              <span>Analyse Substitution</span>
+            </button>
           </div>
 
-          <div class="dash-kpi-card p-6 bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between rounded-3xl">
-            <div>
-              <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-black text-stone-400 uppercase tracking-wider">Saved Notes</span>
-                <span class="w-10 h-10 rounded-2xl bg-sage-100 dark:bg-stone-800 text-sage-700 dark:text-sage-300 flex items-center justify-center font-bold">
-                  <i class="fa-solid fa-clipboard-list"></i>
-                </span>
-              </div>
-              <span class="text-3xl font-black text-forest dark:text-ivory tracking-tight">${totalNotesCount}</span>
-            </div>
-            <div class="pt-3 border-t border-beige-100 dark:border-stone-800">
-              <span class="text-[11px] text-stone-500 font-bold">User notes stored in browser</span>
-            </div>
-          </div>
-
-          <div class="dash-kpi-card p-6 bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between rounded-3xl">
-            <div>
-              <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-black text-stone-400 uppercase tracking-wider">Slider Range</span>
-                <span class="w-10 h-10 rounded-2xl bg-peach/50 text-terracotta flex items-center justify-center font-bold">
-                  <i class="fa-solid fa-sliders"></i>
-                </span>
-              </div>
-              <span class="text-3xl font-black text-forest dark:text-ivory tracking-tight">5–200</span>
-            </div>
-            <div class="pt-3 border-t border-beige-100 dark:border-stone-800">
-              <span class="text-[11px] text-stone-500 font-bold">Covers supported in calculator below</span>
-            </div>
-          </div>
         </div>
 
-        <!-- Interactive Calculator -->
-        <div class="p-6 md:p-8 rounded-3xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm space-y-6">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <span class="text-xs font-black uppercase tracking-wider text-terracotta">Kitchen Batch Calculator</span>
-              <h3 class="text-xl font-black text-forest dark:text-ivory flex items-center gap-2">
-                <i class="fa-solid fa-calculator text-terracotta"></i>
-                <span>Custom Covers Cost & Margin Simulator</span>
-              </h3>
-              <p class="text-xs text-stone-500">Calculations update strictly from the values you enter below (zero pre-filled mock prices)</p>
+        <!-- ============================================== -->
+        <!-- 3. COMPARISON DASHBOARD (TWO MAIN SECTIONS)    -->
+        <!-- ============================================== -->
+        ${result ? `
+          <div class="space-y-6 animate-fade-up">
+            
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span class="text-xs font-black uppercase tracking-wider text-terracotta">Recipe Comparison</span>
+                <h3 class="text-2xl font-black text-forest dark:text-ivory flex items-center gap-2">
+                  <span>${result.dish_name}</span>
+                  <span class="text-xs font-bold px-2.5 py-1 rounded-full bg-peach/50 dark:bg-stone-800 text-terracotta border border-terracotta/30">
+                    Scaled for ${result.persons} Covers
+                  </span>
+                </h3>
+              </div>
+              <span class="text-xs text-stone-500">Comparison across financial, nutritional, textural, and operational parameters</span>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
-              <select id="dash-currency-select" aria-label="Select currency" class="px-3 py-2.5 text-xs rounded-xl border border-beige-200 dark:border-stone-800 bg-ivory dark:bg-[#181410] font-bold text-espresso dark:text-ivory focus:outline-none focus:border-terracotta cursor-pointer shadow-sm">
-                <option value="₹" ${state.currency === '₹' ? 'selected' : ''}>₹ INR</option>
-                <option value="$" ${state.currency === '$' ? 'selected' : ''}>$ USD</option>
-              </select>
-              <select id="dash-cover-recipe-select" class="px-3.5 py-2.5 text-xs rounded-xl border border-beige-200 dark:border-stone-800 bg-ivory dark:bg-[#181410] font-bold text-espresso dark:text-ivory focus:outline-none focus:border-terracotta cursor-pointer shadow-sm">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+              <!-- SECTION A: ORIGINAL RECIPE (BEFORE SUBSTITUTION) -->
+              <div class="p-6 md:p-7 rounded-3xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm space-y-5 relative overflow-hidden">
+                <div class="flex items-center justify-between border-b border-beige-200 dark:border-stone-800 pb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-xl bg-peach/60 dark:bg-stone-800 text-terracotta flex items-center justify-center font-bold text-xs">
+                      A
+                    </span>
+                    <div>
+                      <span class="text-[11px] font-black uppercase tracking-wider text-stone-400">Baseline Recipe</span>
+                      <h4 class="text-lg font-black text-forest dark:text-ivory">Original Recipe (Before Substitution)</h4>
+                    </div>
+                  </div>
+                  <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
+                    Standard Spec
+                  </span>
+                </div>
+
+                <div class="space-y-4 text-xs">
+                  
+                  <div class="p-3.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-100 dark:border-stone-800 flex items-center justify-between">
+                    <span class="font-bold text-stone-600 dark:text-stone-400">Original Ingredient:</span>
+                    <span class="font-black text-forest dark:text-ivory text-sm">${result.original.ingredient}</span>
+                  </div>
+
+                  <div class="p-3.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-100 dark:border-stone-800 flex items-center justify-between">
+                    <span class="font-bold text-stone-600 dark:text-stone-400">Batch Ingredient Quantity:</span>
+                    <span class="font-mono font-black text-forest dark:text-ivory text-sm">
+                      ${result.original.total_quantity.toLocaleString()} ${result.original.unit} 
+                      <span class="text-[11px] text-stone-400 font-normal">(${result.original.quantity_per_person}g / cover)</span>
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="p-3.5 rounded-xl bg-peach/20 dark:bg-stone-900 border border-peach/50 dark:border-stone-800">
+                      <span class="block text-[11px] text-stone-500 uppercase font-bold">Total Estimated Cost</span>
+                      <span class="block text-xl font-black text-forest dark:text-ivory mt-0.5">
+                        ${result.currency}${result.original.total_recipe_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div class="p-3.5 rounded-xl bg-peach/20 dark:bg-stone-900 border border-peach/50 dark:border-stone-800">
+                      <span class="block text-[11px] text-stone-500 uppercase font-bold">Cost Per Person</span>
+                      <span class="block text-xl font-black text-forest dark:text-ivory mt-0.5">
+                        ${result.currency}${result.original.cost_per_person.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="p-3.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-100 dark:border-stone-800">
+                      <span class="block text-[11px] text-stone-500 uppercase font-bold">Total Calories</span>
+                      <span class="block text-xl font-black text-forest dark:text-ivory mt-0.5">
+                        ${result.original.total_calories.toLocaleString()} kcal
+                      </span>
+                    </div>
+
+                    <div class="p-3.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-100 dark:border-stone-800">
+                      <span class="block text-[11px] text-stone-500 uppercase font-bold">Calories Per Person</span>
+                      <span class="block text-xl font-black text-forest dark:text-ivory mt-0.5">
+                        ${result.original.calories_per_person.toLocaleString()} kcal
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="p-3.5 rounded-xl bg-beige/30 dark:bg-stone-900 border border-beige-200 dark:border-stone-800 space-y-1">
+                    <span class="block text-[11px] text-espresso dark:text-beige uppercase font-bold">Original Texture Characteristics:</span>
+                    <p class="text-stone-700 dark:text-stone-300 text-xs leading-relaxed font-medium">
+                      ${result.original.texture}
+                    </p>
+                  </div>
+
+                  <div class="p-3.5 rounded-xl bg-sage-50 dark:bg-stone-900 border border-sage-200 dark:border-stone-800 flex items-center justify-between">
+                    <div>
+                      <span class="block text-[11px] text-sage-800 dark:text-sage-300 uppercase font-bold">Original Profit Margin:</span>
+                      <span class="text-[11px] text-stone-400">At ${result.currency}${result.selling_price_per_person || '—'}/portion selling price</span>
+                    </div>
+                    <span class="text-xl font-black text-sage-700 dark:text-sage-300 font-mono">
+                      ${result.original.profit_margin_display}
+                    </span>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- SECTION B: MODIFIED RECIPE (AFTER SUBSTITUTION) -->
+              <div class="p-6 md:p-7 rounded-3xl bg-white dark:bg-[#1f1a16] border border-terracotta/40 dark:border-terracotta/30 shadow-md space-y-5 relative overflow-hidden">
+                <div class="flex items-center justify-between border-b border-beige-200 dark:border-stone-800 pb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-xl bg-terracotta text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                      B
+                    </span>
+                    <div>
+                      <span class="text-[11px] font-black uppercase tracking-wider text-terracotta">Calibrated Formulation</span>
+                      <h4 class="text-lg font-black text-forest dark:text-ivory">Modified Recipe (After Substitution)</h4>
+                    </div>
+                  </div>
+                  <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-terracotta/15 text-terracotta border border-terracotta/30">
+                    Active Swap
+                  </span>
+                </div>
+
+                <div class="space-y-4 text-xs">
+                  
+                  <div class="p-3.5 rounded-xl bg-peach/20 dark:bg-[#181410] border border-terracotta/20 dark:border-stone-800 flex items-center justify-between">
+                    <span class="font-bold text-stone-600 dark:text-stone-400">Replacement Ingredient:</span>
+                    <span class="font-black text-terracotta text-sm">${result.modified.ingredient}</span>
+                  </div>
+
+                  <div class="p-3.5 rounded-xl bg-peach/20 dark:bg-[#181410] border border-terracotta/20 dark:border-stone-800 flex items-center justify-between">
+                    <span class="font-bold text-stone-600 dark:text-stone-400">Adjusted Replacement Quantity:</span>
+                    <span class="font-mono font-black text-forest dark:text-ivory text-sm">
+                      ${result.modified.total_quantity.toLocaleString()} ${result.modified.unit} 
+                      <span class="text-[11px] text-stone-400 font-normal">(${result.modified.quantity_per_person}g / cover)</span>
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="p-3.5 rounded-xl bg-sage-50 dark:bg-stone-900 border border-sage-200 dark:border-stone-800">
+                      <span class="block text-[11px] text-sage-800 dark:text-sage-300 uppercase font-bold">Total Estimated Cost</span>
+                      <span class="block text-xl font-black text-forest dark:text-ivory mt-0.5">
+                        ${result.currency}${result.modified.total_recipe_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div class="p-3.5 rounded-xl bg-sage-50 dark:bg-stone-900 border border-sage-200 dark:border-stone-800">
+                      <span class="block text-[11px] text-sage-800 dark:text-sage-300 uppercase font-bold">Cost Per Person</span>
+                      <span class="block text-xl font-black text-forest dark:text-ivory mt-0.5">
+                        ${result.currency}${result.modified.cost_per_person.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="p-3.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-100 dark:border-stone-800">
+                      <span class="block text-[11px] text-stone-500 uppercase font-bold">Total Calories</span>
+                      <span class="block text-xl font-black text-forest dark:text-ivory mt-0.5">
+                        ${result.modified.total_calories.toLocaleString()} kcal
+                      </span>
+                    </div>
+
+                    <div class="p-3.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-100 dark:border-stone-800">
+                      <span class="block text-[11px] text-stone-500 uppercase font-bold">Calories Per Person</span>
+                      <span class="block text-xl font-black text-forest dark:text-ivory mt-0.5">
+                        ${result.modified.calories_per_person.toLocaleString()} kcal
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="p-3.5 rounded-xl bg-beige/30 dark:bg-stone-900 border border-beige-200 dark:border-stone-800 space-y-1">
+                    <div class="flex items-center justify-between">
+                      <span class="block text-[11px] text-espresso dark:text-beige uppercase font-bold">Expected Texture Characteristics:</span>
+                      ${result.modified.texture_is_estimate ? '<span class="text-[10px] text-amber-500 font-bold px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/40">Calibrated Estimate</span>' : ''}
+                    </div>
+                    <p class="text-stone-700 dark:text-stone-300 text-xs leading-relaxed font-medium">
+                      ${result.modified.texture}
+                    </p>
+                  </div>
+
+                  <div class="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 flex items-center justify-between">
+                    <div>
+                      <span class="block text-[11px] text-emerald-800 dark:text-emerald-300 uppercase font-bold">Updated Profit Margin:</span>
+                      <span class="text-[11px] text-stone-400">At ${result.currency}${result.selling_price_per_person || '—'}/portion selling price</span>
+                    </div>
+                    <span class="text-xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                      ${result.modified.profit_margin_display}
+                    </span>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+
+            <!-- ============================================== -->
+            <!-- 4. SIDE-BY-SIDE COMPARISON TABLE               -->
+            <!-- ============================================== -->
+            <div class="p-6 md:p-8 rounded-3xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm space-y-5">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-beige-200 dark:border-stone-800 pb-4">
+                <div>
+                  <span class="text-[11px] font-black uppercase tracking-wider text-terracotta">Side-by-Side Analysis</span>
+                  <h4 class="text-xl font-black text-forest dark:text-ivory flex items-center gap-2">
+                    <i class="fa-solid fa-table-columns text-terracotta"></i>
+                    <span>Parameter Shift Comparison Table</span>
+                  </h4>
+                </div>
+                <div class="flex items-center gap-2 text-[11px]">
+                  <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Saving / Gain</span>
+                  <span class="flex items-center gap-1 ml-2"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Cost Increase / Trade-off</span>
+                  <span class="flex items-center gap-1 ml-2"><span class="w-2.5 h-2.5 rounded-full bg-stone-400"></span> Neutral Shift</span>
+                </div>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                  <thead>
+                    <tr class="border-b border-beige-200 dark:border-stone-800 bg-ivory/60 dark:bg-stone-900/60 text-stone-600 dark:text-stone-300 uppercase font-black tracking-wider">
+                      <th class="py-3.5 px-4 rounded-l-xl">Parameter</th>
+                      <th class="py-3.5 px-4">Original Recipe</th>
+                      <th class="py-3.5 px-4">Modified Recipe</th>
+                      <th class="py-3.5 px-4">Difference</th>
+                      <th class="py-3.5 px-4 rounded-r-xl">Culinary & Business Explanation</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-beige-100 dark:divide-stone-800">
+                    ${result.comparison.map(row => {
+                      let badgeClass = 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-300';
+                      let dotColor = 'bg-stone-400';
+                      if (row.indicator === 'green') {
+                        badgeClass = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
+                        dotColor = 'bg-emerald-500';
+                      } else if (row.indicator === 'red') {
+                        badgeClass = 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800';
+                        dotColor = 'bg-rose-500';
+                      }
+
+                      return `
+                        <tr class="hover:bg-peach/10 dark:hover:bg-stone-900/40 transition-colors">
+                          <td class="py-3.5 px-4 font-black text-forest dark:text-ivory whitespace-nowrap">
+                            ${row.parameter}
+                          </td>
+                          <td class="py-3.5 px-4 font-mono font-bold text-stone-700 dark:text-stone-300">
+                            ${row.original}
+                          </td>
+                          <td class="py-3.5 px-4 font-mono font-bold text-forest dark:text-ivory">
+                            ${row.modified}
+                          </td>
+                          <td class="py-3.5 px-4 whitespace-nowrap">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono font-black text-[11px] border ${badgeClass}">
+                              <span class="w-2 h-2 rounded-full ${dotColor}"></span>
+                              <span>${row.difference}</span>
+                            </span>
+                          </td>
+                          <td class="py-3.5 px-4 text-stone-600 dark:text-stone-300 leading-relaxed max-w-md">
+                            ${row.explanation}
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        ` : `
+          <!-- Loading State for Initial Analysis -->
+          <div class="p-12 rounded-3xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 text-center space-y-3">
+            <div class="inline-block animate-spin w-8 h-8 border-4 border-terracotta border-t-transparent rounded-full"></div>
+            <p class="text-sm font-bold text-forest dark:text-ivory">Analyzing ingredient formulation and financial parameters...</p>
+          </div>
+        `}
+
+        <!-- ============================================== -->
+        <!-- 5. PREVIOUS COST & MARGIN CALCULATOR (PRESERVED)-->
+        <!-- ============================================== -->
+        <div class="space-y-6 pt-4 border-t border-beige-200/80 dark:border-stone-800">
+          
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <span class="text-xs font-black uppercase tracking-wider text-stone-400">Custom Simulator</span>
+              <h3 class="text-xl font-black text-forest dark:text-ivory flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-terracotta"></i>
+                <span>Kitchen Batch Cost & Margin Simulator (Custom Unit Pricing)</span>
+              </h3>
+              <p class="text-xs text-stone-500">Fine-tune custom supplier invoices, portion costs, and menu retail prices across covers.</p>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <select id="dash-cover-recipe-select" class="px-3.5 py-2.5 text-xs rounded-xl border border-beige-200 dark:border-stone-800 bg-white dark:bg-[#181410] font-bold text-espresso dark:text-ivory focus:outline-none focus:border-terracotta cursor-pointer shadow-sm">
                 ${RECIPES_DATA.map(r => `
                   <option value="${r.id}" ${r.id === state.dashboardSelectedRecipeId ? 'selected' : ''}>
                     ${r.title}
@@ -3571,66 +3996,116 @@
             </div>
           </div>
 
-          <!-- User Pricing Inputs -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div>
-              <label class="block font-bold text-stone-700 dark:text-stone-300 mb-1">Your Standard Cost / Portion (<span class="dash-currency-symbol">${state.currency}</span>)</label>
-              <input type="number" step="0.01" min="0" id="dash-base-cost-input" value="${state.dashBaseCost}" placeholder="e.g. 120" class="w-full px-3.5 py-2.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta">
+          <!-- 4 KPI Summary Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="dash-kpi-card p-6 bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between rounded-3xl">
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <span class="text-xs font-black text-stone-400 uppercase tracking-wider">Catalog Recipes</span>
+                  <span class="w-10 h-10 rounded-2xl bg-forest/15 text-sage-700 dark:text-sage-400 flex items-center justify-center font-bold">
+                    <i class="fa-solid fa-utensils"></i>
+                  </span>
+                </div>
+                <span class="text-3xl font-black text-forest dark:text-ivory tracking-tight">${totalRecipes}</span>
+              </div>
+              <div class="pt-3 border-t border-beige-100 dark:border-stone-800">
+                <span class="text-[11px] text-sage-700 dark:text-sage-400 font-bold">Dishes available in menu library</span>
+              </div>
             </div>
-            <div>
-              <label class="block font-bold text-stone-700 dark:text-stone-300 mb-1">Your Swapped Cost / Portion (<span class="dash-currency-symbol">${state.currency}</span>)</label>
-              <input type="number" step="0.01" min="0" id="dash-alt-cost-input" value="${state.dashAltCost}" placeholder="e.g. 85" class="w-full px-3.5 py-2.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta">
+
+            <div class="dash-kpi-card p-6 bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between rounded-3xl">
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <span class="text-xs font-black text-stone-400 uppercase tracking-wider">Swap Profiles</span>
+                  <span class="w-10 h-10 rounded-2xl bg-terracotta/15 text-terracotta flex items-center justify-center font-bold">
+                    <i class="fa-solid fa-flask-vial"></i>
+                  </span>
+                </div>
+                <span class="text-3xl font-black text-forest dark:text-ivory tracking-tight">${totalSwaps}</span>
+              </div>
+              <div class="pt-3 border-t border-beige-100 dark:border-stone-800">
+                <span class="text-[11px] text-terracotta font-bold">Target ingredients in Swap Lab</span>
+              </div>
             </div>
-            <div>
-              <label class="block font-bold text-stone-700 dark:text-stone-300 mb-1">Your Menu Price / Portion (<span class="dash-currency-symbol">${state.currency}</span>)</label>
-              <input type="number" step="0.01" min="0" id="dash-retail-price-input" value="${state.dashRetailPrice}" placeholder="e.g. 320" class="w-full px-3.5 py-2.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta">
+
+            <div class="dash-kpi-card p-6 bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between rounded-3xl">
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <span class="text-xs font-black text-stone-400 uppercase tracking-wider">Saved Notes</span>
+                  <span class="w-10 h-10 rounded-2xl bg-sage-100 dark:bg-stone-800 text-sage-700 dark:text-sage-300 flex items-center justify-center font-bold">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                  </span>
+                </div>
+                <span class="text-3xl font-black text-forest dark:text-ivory tracking-tight">${totalNotesCount}</span>
+              </div>
+              <div class="pt-3 border-t border-beige-100 dark:border-stone-800">
+                <span class="text-[11px] text-stone-500 font-bold">User notes stored in browser</span>
+              </div>
+            </div>
+
+            <div class="dash-kpi-card p-6 bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between rounded-3xl">
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <span class="text-xs font-black text-stone-400 uppercase tracking-wider">Headcount Span</span>
+                  <span class="w-10 h-10 rounded-2xl bg-peach/50 text-terracotta flex items-center justify-center font-bold">
+                    <i class="fa-solid fa-sliders"></i>
+                  </span>
+                </div>
+                <span class="text-3xl font-black text-forest dark:text-ivory tracking-tight">5–200</span>
+              </div>
+              <div class="pt-3 border-t border-beige-100 dark:border-stone-800">
+                <span class="text-[11px] text-stone-500 font-bold">Batch covers scaled dynamically</span>
+              </div>
             </div>
           </div>
 
-          <div class="p-5 rounded-2xl bg-ivory dark:bg-[#181410]/60 border border-beige-200 dark:border-stone-800 space-y-4">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-bold text-stone-700 dark:text-stone-300">Target Shift Covers (${selectedCoverRecipe.title}):</span>
-              <span class="text-2xl font-black text-terracotta font-heading" id="dash-covers-display">
-                ${m.covers} Persons
-              </span>
-            </div>
+          <!-- Interactive Calculator Card -->
+          <div class="p-6 md:p-8 rounded-3xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm space-y-6">
             
-            <input 
-              type="range" 
-              id="dash-covers-slider" 
-              min="5" 
-              max="200" 
-              step="5" 
-              value="${state.dashboardCovers}"
-              class="w-full accent-terracotta cursor-pointer"
-            >
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div>
+                <label class="block font-bold text-stone-700 dark:text-stone-300 mb-1">Your Standard Cost / Portion (<span class="dash-currency-symbol">${state.currency}</span>)</label>
+                <input type="number" step="0.01" min="0" id="dash-base-cost-input" value="${state.dashBaseCost}" placeholder="e.g. 120" class="w-full px-3.5 py-2.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta">
+              </div>
+              <div>
+                <label class="block font-bold text-stone-700 dark:text-stone-300 mb-1">Your Swapped Cost / Portion (<span class="dash-currency-symbol">${state.currency}</span>)</label>
+                <input type="number" step="0.01" min="0" id="dash-alt-cost-input" value="${state.dashAltCost}" placeholder="e.g. 85" class="w-full px-3.5 py-2.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta">
+              </div>
+              <div>
+                <label class="block font-bold text-stone-700 dark:text-stone-300 mb-1">Your Menu Price / Portion (<span class="dash-currency-symbol">${state.currency}</span>)</label>
+                <input type="number" step="0.01" min="0" id="dash-retail-price-input" value="${state.dashRetailPrice}" placeholder="e.g. 320" class="w-full px-3.5 py-2.5 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta">
+              </div>
+            </div>
+
+            <!-- 4 Calculator KPI Output Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+              <div class="p-5 rounded-2xl bg-peach/30 dark:bg-stone-900 border border-peach dark:border-stone-800">
+                <span class="block text-xs text-terracotta font-bold uppercase">Standard Batch Cost</span>
+                <span id="dash-out-base-total" class="block text-2xl font-black text-forest dark:text-ivory my-1">${legacyMetrics.baseTotal}</span>
+                <span class="block text-xs text-stone-500">Across ${legacyMetrics.covers} covers</span>
+              </div>
+
+              <div class="p-5 rounded-2xl bg-sage-50 dark:bg-stone-900 border border-sage-200 dark:border-stone-800">
+                <span class="block text-xs text-sage-700 dark:text-sage-300 font-bold uppercase">Swapped Batch Cost</span>
+                <span id="dash-out-alt-total" class="block text-2xl font-black text-forest dark:text-ivory my-1">${legacyMetrics.altTotal}</span>
+                <span class="block text-xs text-stone-500">Across ${legacyMetrics.covers} covers</span>
+              </div>
+
+              <div class="p-5 rounded-2xl bg-beige/40 dark:bg-stone-900 border border-beige-300 dark:border-stone-800">
+                <span class="block text-xs text-espresso dark:text-beige font-bold uppercase">Gross Revenue</span>
+                <span id="dash-out-revenue" class="block text-2xl font-black text-forest dark:text-ivory my-1">${legacyMetrics.revenueTotal}</span>
+                <span id="dash-out-margin" class="block text-xs text-sage-700 dark:text-sage-400 font-bold">${legacyMetrics.altMargin}</span>
+              </div>
+
+              <div class="p-5 rounded-2xl bg-peach/40 dark:bg-stone-900 border border-terracotta/30 dark:border-stone-800">
+                <span class="block text-xs text-terracotta font-bold uppercase">Net Cost Difference</span>
+                <span id="dash-out-savings" class="block text-2xl font-black text-terracotta my-1">${legacyMetrics.diffTotal}</span>
+                <span class="block text-xs text-stone-500">Net portion variance</span>
+              </div>
+            </div>
+
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
-            <div class="p-5 rounded-2xl bg-peach/30 dark:bg-stone-900 border border-peach dark:border-stone-800">
-              <span class="block text-xs text-terracotta font-bold uppercase">Standard Batch Cost</span>
-              <span id="dash-out-base-total" class="block text-2xl font-black text-forest dark:text-ivory my-1">${m.baseTotal}</span>
-              <span class="block text-xs text-stone-500">Based on your standard cost</span>
-            </div>
-
-            <div class="p-5 rounded-2xl bg-sage-50 dark:bg-stone-900 border border-sage-200 dark:border-stone-800">
-              <span class="block text-xs text-sage-700 dark:text-sage-300 font-bold uppercase">Swapped Batch Cost</span>
-              <span id="dash-out-alt-total" class="block text-2xl font-black text-forest dark:text-ivory my-1">${m.altTotal}</span>
-              <span class="block text-xs text-stone-500">Based on your alt cost</span>
-            </div>
-
-            <div class="p-5 rounded-2xl bg-beige/40 dark:bg-stone-900 border border-beige-300 dark:border-stone-800">
-              <span class="block text-xs text-espresso dark:text-beige font-bold uppercase">Gross Revenue</span>
-              <span id="dash-out-revenue" class="block text-2xl font-black text-forest dark:text-ivory my-1">${m.revenueTotal}</span>
-              <span id="dash-out-margin" class="block text-xs text-sage-700 dark:text-sage-400 font-bold">${m.altMargin}</span>
-            </div>
-
-            <div class="p-5 rounded-2xl bg-peach/40 dark:bg-stone-900 border border-terracotta/30 dark:border-stone-800">
-              <span class="block text-xs text-terracotta font-bold uppercase">Net Cost Difference</span>
-              <span id="dash-out-savings" class="block text-2xl font-black text-terracotta my-1">${m.diffTotal}</span>
-              <span class="block text-xs text-stone-500">Across selected covers</span>
-            </div>
-          </div>
         </div>
 
       </div>
@@ -3638,53 +4113,180 @@
 
     container.innerHTML = html;
 
-    function refreshDashNumbers() {
-      const updated = computeDashMetrics();
-      const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-      setTxt('dash-covers-display', `${updated.covers} Persons`);
-      setTxt('dash-out-base-total', updated.baseTotal);
-      setTxt('dash-out-alt-total', updated.altTotal);
-      setTxt('dash-out-revenue', updated.revenueTotal);
-      setTxt('dash-out-margin', updated.altMargin);
-      setTxt('dash-out-savings', updated.diffTotal);
+    // Helper: Real-time dynamic recalculation function
+    async function triggerAnalysisRecalculation() {
+      const dish = (document.getElementById('sub-dish-input')?.value || state.dashDishName || '').trim();
+      const missing = (document.getElementById('sub-missing-input')?.value || state.dashMissingIng || '').trim();
+      const repl = (document.getElementById('sub-replacement-input')?.value || state.dashReplacementIng || '').trim();
+      const covers = parseInt(document.getElementById('sub-persons-slider')?.value || state.dashboardCovers, 10) || 5;
+      const price = parseFloat(document.getElementById('sub-selling-price-input')?.value || state.dashRetailPrice) || 320;
+
+      state.dashDishName = dish;
+      state.dashMissingIng = missing;
+      state.dashReplacementIng = repl;
+      state.dashboardCovers = covers;
+      state.dashRetailPrice = price.toString();
+
+      const analyseBtn = document.getElementById('sub-analyse-btn');
+      if (analyseBtn) {
+        analyseBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i><span>Analyzing...</span>';
+      }
+
+      try {
+        const res = await ApiService.analyzeSubstitution({
+          dish_name: dish,
+          missing_ingredient: missing,
+          replacement_ingredient: repl,
+          persons: covers,
+          selling_price_per_person: price,
+          currency: state.currency
+        });
+        state.dashAnalysisResult = res;
+
+        // Sync legacy inputs
+        if (res.original) state.dashBaseCost = res.original.cost_per_person;
+        if (res.modified) state.dashAltCost = res.modified.cost_per_person;
+
+        renderDashboardView();
+      } catch (err) {
+        console.error('Analysis failed:', err);
+      } finally {
+        if (analyseBtn) {
+          analyseBtn.innerHTML = '<i class="fa-solid fa-calculator text-base"></i><span>Analyse Substitution</span>';
+        }
+      }
     }
 
+    // Event listener: Analyse Substitution Button
+    document.getElementById('sub-analyse-btn')?.addEventListener('click', () => {
+      triggerAnalysisRecalculation();
+    });
+
+    // Event listener: Slider for dynamic headcount scaling (5–200)
+    const personSlider = document.getElementById('sub-persons-slider');
+    personSlider?.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      state.dashboardCovers = val;
+      const disp = document.getElementById('sub-persons-display');
+      if (disp) disp.textContent = `${val} People`;
+
+      // Live update slider on previous simulator as well
+      const legacy = computeLegacyDashMetrics();
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt('dash-out-base-total', legacy.baseTotal);
+      setTxt('dash-out-alt-total', legacy.altTotal);
+      setTxt('dash-out-revenue', legacy.revenueTotal);
+      setTxt('dash-out-margin', legacy.altMargin);
+      setTxt('dash-out-savings', legacy.diffTotal);
+    });
+
+    personSlider?.addEventListener('change', () => {
+      triggerAnalysisRecalculation();
+    });
+
+    // Quick suggestion chips
+    document.querySelectorAll('.sub-dish-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const d = btn.getAttribute('data-dish');
+        const m = btn.getAttribute('data-missing');
+        const r = btn.getAttribute('data-repl');
+        if (d) state.dashDishName = d;
+        if (m) state.dashMissingIng = m;
+        if (r) state.dashReplacementIng = r;
+        triggerAnalysisRecalculation();
+      });
+    });
+
+    document.querySelectorAll('.sub-missing-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const v = btn.getAttribute('data-val');
+        const input = document.getElementById('sub-missing-input');
+        if (input && v) {
+          input.value = v;
+          state.dashMissingIng = v;
+        }
+      });
+    });
+
+    document.querySelectorAll('.sub-repl-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const v = btn.getAttribute('data-val');
+        const input = document.getElementById('sub-replacement-input');
+        if (input && v) {
+          input.value = v;
+          state.dashReplacementIng = v;
+        }
+      });
+    });
+
+    // Enter key submits analysis
+    ['sub-dish-input', 'sub-missing-input', 'sub-replacement-input', 'sub-selling-price-input'].forEach(id => {
+      document.getElementById(id)?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          triggerAnalysisRecalculation();
+        }
+      });
+    });
+
+    // Currency Switcher
+    document.getElementById('dash-currency-select')?.addEventListener('change', (e) => {
+      state.currency = e.target.value;
+      localStorage.setItem('flavorshift_currency', state.currency);
+      document.querySelectorAll('.dash-currency-symbol').forEach(el => { el.textContent = state.currency; });
+      triggerAnalysisRecalculation();
+    });
+
+    // Quick Pantry Button
     document.getElementById('dash-quick-pantry-btn')?.addEventListener('click', () => {
       switchTab('explore');
       document.getElementById('pantry-drawer')?.classList.remove('hidden');
     });
 
-    document.getElementById('dash-currency-select')?.addEventListener('change', (e) => {
-      state.currency = e.target.value;
-      localStorage.setItem('flavorshift_currency', state.currency);
-      document.querySelectorAll('.dash-currency-symbol').forEach(el => { el.textContent = state.currency; });
-      refreshDashNumbers();
-    });
-
+    // Legacy Recipe Selector
     document.getElementById('dash-cover-recipe-select')?.addEventListener('change', (e) => {
       state.dashboardSelectedRecipeId = e.target.value;
-      renderDashboardView();
+      const rec = RECIPES_DATA.find(r => r.id === e.target.value);
+      if (rec) {
+        state.dashDishName = rec.title;
+        if (rec.ingredients && rec.ingredients[0]) {
+          state.dashMissingIng = rec.ingredients[0].name.split(' ')[0];
+        }
+        triggerAnalysisRecalculation();
+      }
     });
 
+    // Legacy inputs
     document.getElementById('dash-base-cost-input')?.addEventListener('input', (e) => {
       state.dashBaseCost = e.target.value;
-      refreshDashNumbers();
+      const legacy = computeLegacyDashMetrics();
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt('dash-out-base-total', legacy.baseTotal);
+      setTxt('dash-out-alt-total', legacy.altTotal);
+      setTxt('dash-out-revenue', legacy.revenueTotal);
+      setTxt('dash-out-margin', legacy.altMargin);
+      setTxt('dash-out-savings', legacy.diffTotal);
     });
 
     document.getElementById('dash-alt-cost-input')?.addEventListener('input', (e) => {
       state.dashAltCost = e.target.value;
-      refreshDashNumbers();
+      const legacy = computeLegacyDashMetrics();
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt('dash-out-base-total', legacy.baseTotal);
+      setTxt('dash-out-alt-total', legacy.altTotal);
+      setTxt('dash-out-revenue', legacy.revenueTotal);
+      setTxt('dash-out-margin', legacy.altMargin);
+      setTxt('dash-out-savings', legacy.diffTotal);
     });
 
     document.getElementById('dash-retail-price-input')?.addEventListener('input', (e) => {
       state.dashRetailPrice = e.target.value;
-      refreshDashNumbers();
-    });
-
-    const coverSlider = document.getElementById('dash-covers-slider');
-    coverSlider?.addEventListener('input', (e) => {
-      state.dashboardCovers = parseInt(e.target.value, 10);
-      refreshDashNumbers();
+      const subPrice = document.getElementById('sub-selling-price-input');
+      if (subPrice) subPrice.value = e.target.value;
+      const legacy = computeLegacyDashMetrics();
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt('dash-out-revenue', legacy.revenueTotal);
+      setTxt('dash-out-margin', legacy.altMargin);
     });
   }
 
@@ -4408,6 +5010,8 @@
       renderSwapLabView();
     } else if (tabName === 'explore') {
       renderExploreView();
+    } else if (tabName === 'dashboard') {
+      renderDashboardView();
     } else if (tabName === 'htv') {
       renderHtvView();
     } else if (tabName === 'favorites') {

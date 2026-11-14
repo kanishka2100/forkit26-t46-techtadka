@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.core.database import init_db
 from app.core.security import setup_middleware
 from app.routers import (
+    dashboard_router,
     flavor_router,
     health_router,
     htv_router,
@@ -59,6 +60,7 @@ app.include_router(ratio_router.router, prefix=settings.API_PREFIX)
 app.include_router(sop_router.router, prefix=settings.API_PREFIX)
 app.include_router(htv_router.router, prefix=settings.API_PREFIX)
 app.include_router(substitution_router.router, prefix=settings.API_PREFIX)
+app.include_router(dashboard_router.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/", tags=["Root"])

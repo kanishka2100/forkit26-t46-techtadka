@@ -148,6 +148,15 @@
 
         <button 
           type="button" 
+          data-tab="dashboard"
+          class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-stone-700 dark:text-stone-300 hover:text-forest dark:hover:text-white transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+        >
+          <i class="fa-solid fa-calculator text-terracotta text-xs"></i>
+          <span>Cost & Margin</span>
+        </button>
+
+        <button 
+          type="button" 
           data-tab="htv"
           class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-stone-700 dark:text-stone-300 hover:text-forest dark:hover:text-white transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
         >
@@ -200,6 +209,10 @@
       <button type="button" data-tab="explore" class="nav-tab-btn py-1 px-2 text-xs font-medium flex flex-col items-center">
         <i class="fa-solid fa-utensils mb-0.5 text-forest-500 dark:text-sage-400"></i>
         <span>Menus</span>
+      </button>
+      <button type="button" data-tab="dashboard" class="nav-tab-btn py-1 px-2 text-xs font-medium flex flex-col items-center">
+        <i class="fa-solid fa-calculator mb-0.5 text-terracotta"></i>
+        <span>Cost</span>
       </button>
       <button type="button" data-tab="htv" class="nav-tab-btn py-1 px-2 text-xs font-medium flex flex-col items-center">
         <i class="fa-solid fa-clipboard-check mb-0.5 text-sage-600"></i>
@@ -332,6 +345,13 @@
     <section id="view-htv" class="tab-view-container hidden space-y-6 animate-fade-up">
       <div id="htv-view-container">
         <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- VIEW 4: COST & MARGIN DASHBOARD WITH INGREDIENT SUBSTITUTION ANALYSIS -->
+    <section id="view-dashboard" class="tab-view-container hidden space-y-6 animate-fade-up">
+      <div id="dashboard-view-container">
+        <!-- Rendered dynamically by JS -->
       </div>
     </section>
 
