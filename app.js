@@ -5077,11 +5077,12 @@
     renderSwapLabView();
     renderExploreView();
     renderHtvView();
+    renderDashboardView();
     setupEventListeners();
 
     // Hash-based direct view navigation
     const hash = (window.location.hash || '').replace('#', '').trim();
-    if (hash === 'explore' || hash === 'htv' || hash === 'favorites' || hash === 'swaplab') {
+    if (hash === 'explore' || hash === 'htv' || hash === 'favorites' || hash === 'swaplab' || hash === 'dashboard') {
       switchTab(hash);
     }
 

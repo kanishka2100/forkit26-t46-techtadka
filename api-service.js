@@ -4755,7 +4755,17 @@ const ApiService = (function () {
       }
     });
 
-    // ========================================================
+  // Wire hero diagnostics trigger
+    const heroDrawerBtn = document.getElementById('hero-open-drawer-btn');
+    heroDrawerBtn?.addEventListener('click', () => {
+      drawer?.classList.remove('hidden');
+      drawer?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+
+    resetBtn?.addEventListener('click', resetConfig);
+  }
+
+  // ========================================================
   // INGREDIENT SUBSTITUTION ANALYSIS (COST & MARGIN DASHBOARD)
   // ========================================================
   async function analyzeSubstitution(payload) {
@@ -5015,16 +5025,6 @@ const ApiService = (function () {
         is_cost_saving: replTotalCost < origTotalCost
       }
     };
-  }
-
-  // Wire hero diagnostics trigger
-    const heroDrawerBtn = document.getElementById('hero-open-drawer-btn');
-    heroDrawerBtn?.addEventListener('click', () => {
-      drawer?.classList.remove('hidden');
-      drawer?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-
-    resetBtn?.addEventListener('click', resetConfig);
   }
 
   return {
