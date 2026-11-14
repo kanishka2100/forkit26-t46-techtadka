@@ -10,12 +10,15 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.dashboard import (
+    RecipeCostingRequest,
+    RecipeCostingResponse,
     SubstitutionAnalysisRequest,
     SubstitutionAnalysisResponse,
 )
 from app.services.dashboard_service import (
     INGREDIENT_DATABASE,
     analyze_substitution,
+    calculate_recipe_costing,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["Cost & Margin Dashboard"])
@@ -36,6 +39,22 @@ async def api_analyze_substitution(request: SubstitutionAnalysisRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to analyze substitution: {str(e)}"
+        )
+
+
+@router.post("/recipe-costing", response_model=RecipeCostingResponse)
+async def api_calculate_recipe_costing(request: RecipeCostingRequest):
+    """OpenKitchen & Restaurant Menu Engineering recipe costing and pricing calculation.
+
+    Computes line-item yields, batch cost, portion cost, recommended dine-in price,
+    delivery aggregator margin-protecting price, and Kasavana & Smith matrix classification.
+    """
+    try:
+        return calculate_recipe_costing(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to calculate recipe costing: {str(e)}"
         )
 
 

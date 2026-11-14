@@ -62,3 +62,66 @@ class SubstitutionAnalysisResponse(BaseModel):
     modified: RecipeMetricsSection
     comparison: List[ComparisonRow]
     summary: Dict[str, Any]
+
+
+class RecipeCostingItem(BaseModel):
+    """Single ingredient line item in a culinary recipe costing sheet."""
+
+    name: str = Field(..., examples=["Basmati Rice"])
+    ep_quantity: float = Field(..., ge=0, examples=[500.0])
+    unit: str = Field("g", description="Recipe measurement unit: g, kg, ml, l, pcs, tsp, tbsp")
+    purchase_price: float = Field(..., ge=0, description="As Purchased price per purchase unit")
+    purchase_unit: str = Field("kg", description="Packaging unit: kg, l, pcs, g")
+    yield_percent: float = Field(100.0, ge=1.0, le=100.0, description="Edible portion yield percentage (e.g. 85 for onion trim loss)")
+
+
+class RecipeCostingRequest(BaseModel):
+    """OpenKitchen & Restaurant Menu Engineering recipe costing and pricing request."""
+
+    recipe_name: str = Field("Custom Recipe", min_length=1, max_length=120)
+    portions: int = Field(10, ge=1, le=1000, description="Number of portions / covers in batch")
+    shrinkage_percent: float = Field(3.0, ge=0.0, le=50.0, description="Cooking evaporation / waste shrinkage buffer %")
+    target_food_cost_percent: float = Field(30.0, ge=5.0, le=90.0, description="Target food cost % (e.g. 28% to 35%)")
+    packaging_cost_per_portion: float = Field(15.0, ge=0.0, description="Takeout / delivery container packaging cost")
+    delivery_commission_percent: float = Field(22.0, ge=0.0, le=50.0, description="Aggregator fee % (e.g. 22% Swiggy/Zomato)")
+    menu_selling_price: Optional[float] = Field(None, ge=0.0, description="Actual menu retail price")
+    sales_volume_level: str = Field("high", description="Sales popularity level: 'high' or 'low' for Kasavana & Smith matrix")
+    currency: Optional[str] = Field("₹", description="Currency symbol: ₹ or $")
+    ingredients: List[RecipeCostingItem] = Field(default_factory=list)
+
+
+class CostingItemResult(BaseModel):
+    """Calculated AP quantity and line-item cost for an ingredient."""
+
+    name: str
+    ep_quantity: float
+    unit: str
+    yield_percent: float
+    ap_quantity: float
+    ap_unit: str
+    cost: float
+    cost_share_percent: float
+
+
+class RecipeCostingResponse(BaseModel):
+    """Comprehensive culinary recipe costing, pricing, and menu matrix output."""
+
+    status: str = "success"
+    recipe_name: str
+    portions: int
+    currency: str
+    total_batch_cost: float
+    cost_per_portion: float
+    recommended_dine_in_price: float
+    actual_selling_price: float
+    actual_food_cost_percent: float
+    actual_gross_margin_percent: float
+    contribution_margin: float
+    packaging_cost: float
+    delivery_commission_percent: float
+    recommended_delivery_price: float
+    net_delivery_payout: float
+    menu_matrix_class: str  # Star, Plowhorse, Puzzle, Dog
+    menu_matrix_badge: str
+    menu_matrix_strategy: str
+    ingredients: List[CostingItemResult]

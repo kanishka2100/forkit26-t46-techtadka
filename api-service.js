@@ -5027,12 +5027,168 @@ const ApiService = (function () {
     };
   }
 
+  // ========================================================
+  // OPENKITCHEN RECIPE COSTING & RESTAURANT PRICING ENGINE
+  // ========================================================
+  function calculateRecipeCostingClient(req) {
+    const portions = Math.max(1, parseInt(req.portions, 10) || 10);
+    const shrinkage = Math.max(0, parseFloat(req.shrinkage_percent) || 3.0);
+    const targetFcPct = Math.max(5, Math.min(90, parseFloat(req.target_food_cost_percent) || 30.0));
+    const pkgCost = Math.max(0, parseFloat(req.packaging_cost_per_portion) || 15.0);
+    const commPct = Math.max(0, Math.min(50, parseFloat(req.delivery_commission_percent) || 22.0));
+    const currency = req.currency || '₹';
+    const volumeLevel = (req.sales_volume_level || 'high').trim().toLowerCase();
+
+    function normalizeToBase(qty, unit) {
+      const u = (unit || 'g').trim().toLowerCase();
+      if (u === 'kg' || u === 'kilogram') return { base: qty * 1000.0, type: 'weight' };
+      if (u === 'g' || u === 'gram') return { base: qty, type: 'weight' };
+      if (u === 'tbsp' || u === 'tablespoon') return { base: qty * 15.0, type: 'weight' };
+      if (u === 'tsp' || u === 'teaspoon') return { base: qty * 5.0, type: 'weight' };
+      if (u === 'l' || u === 'liter' || u === 'litre') return { base: qty * 1000.0, type: 'volume' };
+      if (u === 'ml' || u === 'milliliter') return { base: qty, type: 'volume' };
+      if (u === 'pcs' || u === 'pc' || u === 'piece' || u === 'unit') return { base: qty, type: 'count' };
+      return { base: qty, type: 'weight' };
+    }
+
+    function purchaseUnitBase(pUnit) {
+      const pu = (pUnit || 'kg').trim().toLowerCase();
+      if (pu === 'kg' || pu === 'l' || pu === 'liter') return 1000.0;
+      if (pu === 'g' || pu === 'ml') return 1.0;
+      if (pu === 'pcs' || pu === 'pc' || pu === 'unit') return 1.0;
+      return 1000.0;
+    }
+
+    let totalBatchCost = 0;
+    const ingredients = (req.ingredients || []).map(item => {
+      const epQty = Math.max(0, parseFloat(item.ep_quantity) || 0);
+      const yieldPct = Math.max(1, Math.min(100, parseFloat(item.yield_percent) || 100));
+      const pPrice = Math.max(0, parseFloat(item.purchase_price) || 0);
+
+      const norm = normalizeToBase(epQty, item.unit);
+      const pBase = purchaseUnitBase(item.purchase_unit);
+
+      // AP Qty adjusted for yield and shrinkage buffer
+      const apBaseQty = (norm.base / (yieldPct / 100.0)) * (1.0 + shrinkage / 100.0);
+      const apPurchaseUnits = apBaseQty / pBase;
+      const lineCost = apPurchaseUnits * pPrice;
+      totalBatchCost += lineCost;
+
+      return {
+        name: item.name || 'Ingredient',
+        ep_quantity: epQty,
+        unit: item.unit || 'g',
+        yield_percent: yieldPct,
+        ap_quantity: parseFloat(apPurchaseUnits.toFixed(3)),
+        ap_unit: item.purchase_unit || 'kg',
+        cost: parseFloat(lineCost.toFixed(2)),
+        cost_share_percent: 0
+      };
+    });
+
+    ingredients.forEach(i => {
+      i.cost_share_percent = totalBatchCost > 0 ? parseFloat(((i.cost / totalBatchCost) * 100).toFixed(1)) : 0;
+    });
+
+    const costPerPortion = parseFloat((totalBatchCost / portions).toFixed(2));
+    const recDineInPrice = parseFloat((costPerPortion / (targetFcPct / 100.0)).toFixed(2));
+    const actualSellingPrice = (parseFloat(req.menu_selling_price) > 0)
+      ? parseFloat(parseFloat(req.menu_selling_price).toFixed(2))
+      : recDineInPrice;
+
+    const contributionMargin = parseFloat((actualSellingPrice - costPerPortion).toFixed(2));
+    const actualFcPct = actualSellingPrice > 0 ? parseFloat(((costPerPortion / actualSellingPrice) * 100).toFixed(1)) : 0;
+    const actualGmPct = actualSellingPrice > 0 ? parseFloat((((actualSellingPrice - costPerPortion) / actualSellingPrice) * 100).toFixed(1)) : 0;
+
+    const commFraction = commPct / 100.0;
+    const recDeliveryPrice = commFraction < 0.99
+      ? parseFloat(((costPerPortion + pkgCost + Math.max(0, contributionMargin)) / (1.0 - commFraction)).toFixed(2))
+      : parseFloat((costPerPortion + pkgCost).toFixed(2));
+
+    const netDeliveryPayout = parseFloat(((recDeliveryPrice * (1.0 - commFraction)) - pkgCost).toFixed(2));
+
+    const isHighMargin = actualGmPct >= (100.0 - targetFcPct);
+    const isHighVolume = volumeLevel !== 'low';
+
+    let matrixClass, matrixBadge, matrixStrategy;
+    if (isHighMargin && isHighVolume) {
+      matrixClass = 'Star';
+      matrixBadge = '🌟 Star (High Margin, High Volume)';
+      matrixStrategy = 'Menu Star: High profitability & strong customer demand. Protect recipe consistency, maintain portion control, and feature prominently in menu sweet spots.';
+    } else if (!isHighMargin && isHighVolume) {
+      matrixClass = 'Plowhorse';
+      matrixBadge = '🐎 Plowhorse (Low Margin, High Volume)';
+      matrixStrategy = 'Plowhorse Favorite: High volume but lower margin. Use FlavorShift smart substitutions to lower ingredient cost, reduce shrinkage, or apply a subtle 5–8% price increase.';
+    } else if (isHighMargin && !isHighVolume) {
+      matrixClass = 'Puzzle';
+      matrixBadge = '🧩 Puzzle (High Margin, Low Volume)';
+      matrixStrategy = 'Profit Puzzle: High margin but under-ordered. Improve dish description, reposition on menu prime real estate, bundle with drinks, or train service staff to recommend.';
+    } else {
+      matrixClass = 'Dog';
+      matrixBadge = '🐕 Dog (Low Margin, Low Volume)';
+      matrixStrategy = 'Menu Dog: Low profit & low customer volume. Candidate for recipe overhaul, seasonal rotation, or complete elimination to streamline kitchen prep.';
+    }
+
+    return {
+      status: 'success',
+      recipe_name: req.recipe_name || 'Custom Recipe',
+      portions,
+      currency,
+      total_batch_cost: parseFloat(totalBatchCost.toFixed(2)),
+      cost_per_portion: costPerPortion,
+      recommended_dine_in_price: recDineInPrice,
+      actual_selling_price: actualSellingPrice,
+      actual_food_cost_percent: actualFcPct,
+      actual_gross_margin_percent: actualGmPct,
+      contribution_margin: contributionMargin,
+      packaging_cost: pkgCost,
+      delivery_commission_percent: commPct,
+      recommended_delivery_price: recDeliveryPrice,
+      net_delivery_payout: netDeliveryPayout,
+      menu_matrix_class: matrixClass,
+      menu_matrix_badge: matrixBadge,
+      menu_matrix_strategy: matrixStrategy,
+      ingredients
+    };
+  }
+
+  async function calculateRecipeCosting(payload) {
+    if (!payload) return { status: 'error', message: 'Payload required' };
+
+    if (isBackendConnected && API_BASE_URL && !isFoodoscopeCloud(API_BASE_URL)) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        const res = await fetch(`${API_BASE_URL}/dashboard/recipe-costing`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch (err) {
+        console.warn('Backend recipe costing fallback to client calculation:', err);
+      }
+    }
+
+    return calculateRecipeCostingClient(payload);
+  }
+
   return {
     checkHealth,
     resetConfig,
     recommendSubstitutions,
     optimizeRatio,
     analyzeSubstitution,
+    calculateRecipeCosting,
+    calculateRecipeCostingClient,
     getFlavorCompatibility,
     getSensoryProfile,
     searchRecipes,

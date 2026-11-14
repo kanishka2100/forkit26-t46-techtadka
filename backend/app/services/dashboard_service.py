@@ -12,6 +12,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.schemas.dashboard import (
     ComparisonRow,
+    CostingItemResult,
+    RecipeCostingItem,
+    RecipeCostingRequest,
+    RecipeCostingResponse,
     RecipeMetricsSection,
     SubstitutionAnalysisRequest,
     SubstitutionAnalysisResponse,
@@ -690,4 +694,193 @@ def analyze_substitution(req: SubstitutionAnalysisRequest) -> SubstitutionAnalys
         modified=modified_section,
         comparison=comparison,
         summary=summary,
+    )
+
+
+# ========================================================
+# OPENKITCHEN & RESTAURANT MENU ENGINEERING COSTING ENGINE
+# ========================================================
+
+def _normalize_to_base(qty: float, unit: str) -> Tuple[float, str]:
+    """Convert culinary measurement units to base metric (g, ml, or pcs)."""
+    u = unit.strip().lower()
+    if u in ["kg", "kilogram", "kilograms"]:
+        return qty * 1000.0, "weight"
+    if u in ["g", "gram", "grams"]:
+        return qty, "weight"
+    if u in ["tbsp", "tablespoon", "tablespoons"]:
+        return qty * 15.0, "weight"
+    if u in ["tsp", "teaspoon", "teaspoons"]:
+        return qty * 5.0, "weight"
+    if u in ["l", "liter", "liters", "litre", "litres"]:
+        return qty * 1000.0, "volume"
+    if u in ["ml", "milliliter", "milliliters", "millilitre"]:
+        return qty, "volume"
+    if u in ["pcs", "pc", "piece", "pieces", "unit", "units"]:
+        return qty, "count"
+    # Fallback to weight
+    return qty, "weight"
+
+
+def _purchase_unit_base(p_unit: str) -> float:
+    """Get the standard base amount corresponding to 1 purchase unit."""
+    pu = p_unit.strip().lower()
+    if pu in ["kg", "kilogram", "kilograms", "l", "liter", "litre"]:
+        return 1000.0
+    if pu in ["g", "gram", "ml", "milliliter"]:
+        return 1.0
+    if pu in ["pcs", "pc", "piece", "pieces", "unit"]:
+        return 1.0
+    return 1000.0
+
+
+def calculate_recipe_costing(req: RecipeCostingRequest) -> RecipeCostingResponse:
+    """Calculate culinary recipe costing, target margin pricing, and Kasavana & Smith matrix."""
+    portions = max(1, req.portions)
+    shrinkage = max(0.0, req.shrinkage_percent)
+    target_fc_pct = max(5.0, min(90.0, req.target_food_cost_percent))
+    pkg_cost = max(0.0, req.packaging_cost_per_portion)
+    delivery_comm_pct = max(0.0, min(50.0, req.delivery_commission_percent))
+    currency = req.currency or "₹"
+
+    item_results: List[CostingItemResult] = []
+    total_batch_cost = 0.0
+
+    # Calculate line items with Yield & Shrinkage adjustment
+    for item in req.ingredients:
+        ep_qty = max(0.0, item.ep_quantity)
+        yield_pct = max(1.0, min(100.0, item.yield_percent))
+        price_per_p_unit = max(0.0, item.purchase_price)
+
+        # Base conversion
+        base_ep, cat = _normalize_to_base(ep_qty, item.unit)
+        p_base = _purchase_unit_base(item.purchase_unit)
+
+        # AP Qty adjusted for EP Yield % and kitchen shrinkage buffer %
+        yield_factor = yield_pct / 100.0
+        shrink_factor = 1.0 + (shrinkage / 100.0)
+        ap_base_qty = (base_ep / yield_factor) * shrink_factor
+
+        # Standard purchase unit quantity
+        ap_purchase_units = ap_base_qty / p_base
+        line_cost = ap_purchase_units * price_per_p_unit
+        total_batch_cost += line_cost
+
+        # Readable AP Qty display
+        item_results.append(
+            CostingItemResult(
+                name=item.name,
+                ep_quantity=round(ep_qty, 2),
+                unit=item.unit,
+                yield_percent=round(yield_pct, 1),
+                ap_quantity=round(ap_purchase_units, 3),
+                ap_unit=item.purchase_unit,
+                cost=round(line_cost, 2),
+                cost_share_percent=0.0,  # Computed below
+            )
+        )
+
+    # Compute cost share %
+    for res in item_results:
+        res.cost_share_percent = (
+            round((res.cost / total_batch_cost) * 100.0, 1) if total_batch_cost > 0 else 0.0
+        )
+
+    cost_per_portion = round(total_batch_cost / portions, 2)
+
+    # Recommended Dine-in Menu Price using target food cost %
+    rec_dine_in_price = (
+        round(cost_per_portion / (target_fc_pct / 100.0), 2)
+        if target_fc_pct > 0
+        else cost_per_portion
+    )
+
+    # Actual Selling Price (use provided or fallback to recommended)
+    actual_selling_price = (
+        round(req.menu_selling_price, 2)
+        if req.menu_selling_price and req.menu_selling_price > 0
+        else rec_dine_in_price
+    )
+
+    # Financial Margin Metrics
+    contribution_margin = round(actual_selling_price - cost_per_portion, 2)
+    actual_fc_pct = (
+        round((cost_per_portion / actual_selling_price) * 100.0, 1)
+        if actual_selling_price > 0
+        else 0.0
+    )
+    actual_gm_pct = (
+        round(((actual_selling_price - cost_per_portion) / actual_selling_price) * 100.0, 1)
+        if actual_selling_price > 0
+        else 0.0
+    )
+
+    # Delivery Platform Pricing (Swiggy / Zomato / UberEats)
+    # Price = (Food Cost + Packaging + Dine-in Contribution Margin) / (1 - Commission %)
+    comm_fraction = delivery_comm_pct / 100.0
+    if comm_fraction < 0.99:
+        rec_delivery_price = round(
+            (cost_per_portion + pkg_cost + max(0.0, contribution_margin)) / (1.0 - comm_fraction),
+            2,
+        )
+        net_delivery_payout = round(
+            (rec_delivery_price * (1.0 - comm_fraction)) - pkg_cost, 2
+        )
+    else:
+        rec_delivery_price = round(cost_per_portion + pkg_cost, 2)
+        net_delivery_payout = cost_per_portion
+
+    # Kasavana & Smith Menu Engineering Matrix Classification
+    is_high_margin = actual_gm_pct >= (100.0 - target_fc_pct)
+    is_high_volume = req.sales_volume_level.strip().lower() != "low"
+
+    if is_high_margin and is_high_volume:
+        matrix_class = "Star"
+        matrix_badge = "🌟 Star (High Margin, High Volume)"
+        matrix_strategy = (
+            "Menu Star: High profitability & strong customer demand. Protect recipe consistency, "
+            "maintain portion control, and feature prominently in menu sweet spots."
+        )
+    elif not is_high_margin and is_high_volume:
+        matrix_class = "Plowhorse"
+        matrix_badge = "🐎 Plowhorse (Low Margin, High Volume)"
+        matrix_strategy = (
+            "Plowhorse Favorite: High volume but lower margin. Use FlavorShift smart substitutions "
+            "to lower ingredient cost, reduce shrinkage, or apply a subtle 5–8% price increase."
+        )
+    elif is_high_margin and not is_high_volume:
+        matrix_class = "Puzzle"
+        matrix_badge = "🧩 Puzzle (High Margin, Low Volume)"
+        matrix_strategy = (
+            "Profit Puzzle: High margin but under-ordered. Improve dish description, reposition on "
+            "menu prime real estate, bundle with drinks, or train service staff to recommend."
+        )
+    else:
+        matrix_class = "Dog"
+        matrix_badge = "🐕 Dog (Low Margin, Low Volume)"
+        matrix_strategy = (
+            "Menu Dog: Low profit & low customer volume. Candidate for recipe overhaul, "
+            "seasonal rotation, or complete elimination to streamline kitchen prep."
+        )
+
+    return RecipeCostingResponse(
+        status="success",
+        recipe_name=req.recipe_name,
+        portions=portions,
+        currency=currency,
+        total_batch_cost=round(total_batch_cost, 2),
+        cost_per_portion=cost_per_portion,
+        recommended_dine_in_price=rec_dine_in_price,
+        actual_selling_price=actual_selling_price,
+        actual_food_cost_percent=actual_fc_pct,
+        actual_gross_margin_percent=actual_gm_pct,
+        contribution_margin=contribution_margin,
+        packaging_cost=pkg_cost,
+        delivery_commission_percent=delivery_comm_pct,
+        recommended_delivery_price=rec_delivery_price,
+        net_delivery_payout=net_delivery_payout,
+        menu_matrix_class=matrix_class,
+        menu_matrix_badge=matrix_badge,
+        menu_matrix_strategy=matrix_strategy,
+        ingredients=item_results,
     )

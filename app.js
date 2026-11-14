@@ -42,6 +42,27 @@
     dashReplacementIng: 'Tofu',
     dashAnalysisResult: null,
     dashIsAnalyzing: false,
+
+    // Culinary Recipe Costing & Margin Pricing Engine State (OpenKitchen Standard)
+    costingRecipeName: 'Paneer Butter Masala (Dine-in)',
+    costingPortions: 10,
+    costingShrinkageBuffer: 5,
+    costingTargetFoodCostPct: 30,
+    costingActualSellingPrice: 320,
+    costingPackagingCost: 18,
+    costingDeliveryCommissionPct: 22,
+    costingPopularity: 'high',
+    costingIngredients: [
+      { name: 'Paneer (Cottage Cheese)', ep_quantity: 1200, unit: 'g', purchase_price: 380, purchase_unit: 'kg', yield_pct: 98 },
+      { name: 'Fresh Cream', ep_quantity: 350, unit: 'ml', purchase_price: 240, purchase_unit: 'l', yield_pct: 100 },
+      { name: 'Butter', ep_quantity: 200, unit: 'g', purchase_price: 520, purchase_unit: 'kg', yield_pct: 100 },
+      { name: 'Tomatoes (Plum)', ep_quantity: 1500, unit: 'g', purchase_price: 45, purchase_unit: 'kg', yield_pct: 88 },
+      { name: 'Onions', ep_quantity: 600, unit: 'g', purchase_price: 35, purchase_unit: 'kg', yield_pct: 85 },
+      { name: 'Cashew Nuts', ep_quantity: 150, unit: 'g', purchase_price: 850, purchase_unit: 'kg', yield_pct: 100 },
+      { name: 'Ginger Garlic Paste', ep_quantity: 4, unit: 'tbsp', purchase_price: 180, purchase_unit: 'kg', yield_pct: 100 },
+      { name: 'Garam Masala & Spices', ep_quantity: 3, unit: 'tbsp', purchase_price: 600, purchase_unit: 'kg', yield_pct: 100 }
+    ],
+    costingResult: null,
     
     // User-submitted taste reviews (persisted locally)
     customReviews: JSON.parse(localStorage.getItem('flavorshift_reviews') || '{}'),
@@ -77,6 +98,96 @@
     italian: {
       name: "🍝 Italian Bar",
       items: ["Fettuccine / Pasta", "Cremini Mushrooms", "Butter / Ghee", "Tomatoes / Puree"]
+    }
+  };
+
+  // OpenKitchen Culinary Recipe Costing Presets
+  const COSTING_PRESETS = {
+    'pbm': {
+      name: 'Paneer Butter Masala (Dine-in)',
+      portions: 10,
+      targetFoodCostPct: 30,
+      actualSellingPrice: 320,
+      packagingCost: 18,
+      deliveryCommissionPct: 22,
+      popularity: 'high',
+      ingredients: [
+        { name: 'Paneer (Cottage Cheese)', ep_quantity: 1200, unit: 'g', purchase_price: 380, purchase_unit: 'kg', yield_pct: 98 },
+        { name: 'Fresh Cream', ep_quantity: 350, unit: 'ml', purchase_price: 240, purchase_unit: 'l', yield_pct: 100 },
+        { name: 'Butter', ep_quantity: 200, unit: 'g', purchase_price: 520, purchase_unit: 'kg', yield_pct: 100 },
+        { name: 'Tomatoes (Plum)', ep_quantity: 1500, unit: 'g', purchase_price: 45, purchase_unit: 'kg', yield_pct: 88 },
+        { name: 'Onions', ep_quantity: 600, unit: 'g', purchase_price: 35, purchase_unit: 'kg', yield_pct: 85 },
+        { name: 'Cashew Nuts', ep_quantity: 150, unit: 'g', purchase_price: 850, purchase_unit: 'kg', yield_pct: 100 },
+        { name: 'Ginger Garlic Paste', ep_quantity: 4, unit: 'tbsp', purchase_price: 180, purchase_unit: 'kg', yield_pct: 100 },
+        { name: 'Garam Masala & Spices', ep_quantity: 3, unit: 'tbsp', purchase_price: 600, purchase_unit: 'kg', yield_pct: 100 }
+      ]
+    },
+    'biryani': {
+      name: 'Dum Vegetable Biryani',
+      portions: 12,
+      targetFoodCostPct: 28,
+      actualSellingPrice: 280,
+      packagingCost: 22,
+      deliveryCommissionPct: 24,
+      popularity: 'high',
+      ingredients: [
+        { name: 'Basmati Rice (Aged)', ep_quantity: 1200, unit: 'g', purchase_price: 110, purchase_unit: 'kg', yield_pct: 100 },
+        { name: 'Mixed Vegetables (Carrot, Beans, Peas)', ep_quantity: 1000, unit: 'g', purchase_price: 65, purchase_unit: 'kg', yield_pct: 82 },
+        { name: 'Onions (Birista Trimming)', ep_quantity: 800, unit: 'g', purchase_price: 35, purchase_unit: 'kg', yield_pct: 80 },
+        { name: 'Thick Curd / Dahi', ep_quantity: 500, unit: 'g', purchase_price: 70, purchase_unit: 'kg', yield_pct: 100 },
+        { name: 'Desi Ghee', ep_quantity: 180, unit: 'g', purchase_price: 650, purchase_unit: 'kg', yield_pct: 100 },
+        { name: 'Saffron & Warm Milk', ep_quantity: 100, unit: 'ml', purchase_price: 90, purchase_unit: 'l', yield_pct: 100 },
+        { name: 'Biryani Whole Spices & Herbs', ep_quantity: 4, unit: 'tbsp', purchase_price: 800, purchase_unit: 'kg', yield_pct: 100 }
+      ]
+    },
+    'arrabbiata': {
+      name: 'Penne Arrabbiata Classico',
+      portions: 8,
+      targetFoodCostPct: 26,
+      actualSellingPrice: 350,
+      packagingCost: 20,
+      deliveryCommissionPct: 20,
+      popularity: 'high',
+      ingredients: [
+        { name: 'Durum Wheat Penne Rigate', ep_quantity: 800, unit: 'g', purchase_price: 160, purchase_unit: 'kg', yield_pct: 100 },
+        { name: 'San Marzano Peeled Tomatoes', ep_quantity: 1200, unit: 'g', purchase_price: 180, purchase_unit: 'kg', yield_pct: 100 },
+        { name: 'Extra Virgin Olive Oil', ep_quantity: 120, unit: 'ml', purchase_price: 850, purchase_unit: 'l', yield_pct: 100 },
+        { name: 'Fresh Garlic Cloves (Peeled)', ep_quantity: 60, unit: 'g', purchase_price: 140, purchase_unit: 'kg', yield_pct: 85 },
+        { name: 'Crushed Red Pepper Flakes & Basil', ep_quantity: 2, unit: 'tbsp', purchase_price: 500, purchase_unit: 'kg', yield_pct: 100 },
+        { name: 'Parmigiano-Reggiano', ep_quantity: 160, unit: 'g', purchase_price: 1600, purchase_unit: 'kg', yield_pct: 100 }
+      ]
+    },
+    'tofu': {
+      name: 'Crispy Garlic Tofu Stir-Fry',
+      portions: 8,
+      targetFoodCostPct: 25,
+      actualSellingPrice: 290,
+      packagingCost: 18,
+      deliveryCommissionPct: 22,
+      popularity: 'low',
+      ingredients: [
+        { name: 'Extra-Firm Organic Tofu (Pressed)', ep_quantity: 1000, unit: 'g', purchase_price: 160, purchase_unit: 'kg', yield_pct: 95 },
+        { name: 'Broccoli & Bell Peppers (Trimmed)', ep_quantity: 700, unit: 'g', purchase_price: 90, purchase_unit: 'kg', yield_pct: 80 },
+        { name: 'Toasted Sesame Oil', ep_quantity: 80, unit: 'ml', purchase_price: 450, purchase_unit: 'l', yield_pct: 100 },
+        { name: 'Low-Sodium Soy Sauce', ep_quantity: 140, unit: 'ml', purchase_price: 220, purchase_unit: 'l', yield_pct: 100 },
+        { name: 'Cornstarch Slurry & Garlic', ep_quantity: 50, unit: 'g', purchase_price: 120, purchase_unit: 'kg', yield_pct: 92 },
+        { name: 'Toasted Sesame Seeds', ep_quantity: 2, unit: 'tbsp', purchase_price: 400, purchase_unit: 'kg', yield_pct: 100 }
+      ]
+    },
+    'latte': {
+      name: 'Artisan Cold Brew Oat Latte',
+      portions: 15,
+      targetFoodCostPct: 22,
+      actualSellingPrice: 240,
+      packagingCost: 16,
+      deliveryCommissionPct: 25,
+      popularity: 'high',
+      ingredients: [
+        { name: 'Single-Origin Coffee Beans', ep_quantity: 350, unit: 'g', purchase_price: 1200, purchase_unit: 'kg', yield_pct: 98 },
+        { name: 'Barista Edition Oat Milk', ep_quantity: 2500, unit: 'ml', purchase_price: 260, purchase_unit: 'l', yield_pct: 100 },
+        { name: 'Pure Vanilla Bean Syrup', ep_quantity: 150, unit: 'ml', purchase_price: 650, purchase_unit: 'l', yield_pct: 100 },
+        { name: 'Biodegradable Takeaway Cup & Lid', ep_quantity: 15, unit: 'pcs', purchase_price: 7, purchase_unit: 'pcs', yield_pct: 100 }
+      ]
     }
   };
 
@@ -3462,6 +3573,34 @@
       return { baseTotal, altTotal, diffTotal, altMargin, revenueTotal, covers };
     }
 
+    // Ensure costing defaults
+    if (!state.costingRecipeName) state.costingRecipeName = 'Paneer Butter Masala (Dine-in)';
+    if (!state.costingPortions || state.costingPortions < 1) state.costingPortions = 10;
+    if (state.costingShrinkageBuffer === undefined) state.costingShrinkageBuffer = 5;
+    if (state.costingTargetFoodCostPct === undefined) state.costingTargetFoodCostPct = 30;
+    if (state.costingActualSellingPrice === undefined) state.costingActualSellingPrice = 320;
+    if (state.costingPackagingCost === undefined) state.costingPackagingCost = 18;
+    if (state.costingDeliveryCommissionPct === undefined) state.costingDeliveryCommissionPct = 22;
+    if (!state.costingPopularity) state.costingPopularity = 'high';
+    if (!state.costingIngredients || !state.costingIngredients.length) {
+      state.costingIngredients = JSON.parse(JSON.stringify(COSTING_PRESETS['pbm'].ingredients));
+    }
+
+    // Compute OpenKitchen Culinary Costing
+    const costingPayload = {
+      recipe_name: state.costingRecipeName,
+      portions: state.costingPortions,
+      shrinkage_percent: state.costingShrinkageBuffer,
+      target_food_cost_percent: state.costingTargetFoodCostPct,
+      menu_selling_price: state.costingActualSellingPrice,
+      packaging_cost_per_portion: state.costingPackagingCost,
+      delivery_commission_percent: state.costingDeliveryCommissionPct,
+      sales_volume_level: state.costingPopularity,
+      currency: state.currency,
+      ingredients: state.costingIngredients
+    };
+    const costingRes = ApiService.calculateRecipeCostingClient(costingPayload);
+
     // Auto-trigger initial analysis calculation if not yet loaded
     if (!state.dashAnalysisResult && !state.dashIsAnalyzing) {
       state.dashIsAnalyzing = true;
@@ -3970,8 +4109,366 @@
           </div>
         `}
 
+        <!-- ======================================================== -->
+        <!-- 5. OPENKITCHEN CULINARY RECIPE COSTING & PRICING STUDIO  -->
+        <!-- ======================================================== -->
+        <div class="space-y-7 pt-6 border-t-2 border-dashed border-beige-300 dark:border-stone-800">
+          
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-terracotta text-white shadow-sm">
+                  OpenKitchen Engine
+                </span>
+                <span class="text-xs font-bold text-stone-400">Culinary Yield, Shrinkage Loss & Menu Engineering Pricing</span>
+              </div>
+              <h3 class="text-2xl font-black text-forest dark:text-ivory flex items-center gap-2">
+                <i class="fa-solid fa-kitchen-set text-terracotta"></i>
+                <span>OpenKitchen Recipe Costing & Margin Pricing Studio</span>
+              </h3>
+              <p class="text-xs text-stone-600 dark:text-stone-400 mt-1 max-w-3xl leading-relaxed">
+                Open-source food costing & pricing engine. Supports 7 measurement units (g, kg, ml, l, pcs, tsp, tbsp), Edible Portion (EP) vs. As Purchased (AP) yield shrinkage loss, target dine-in margins, packaging, Swiggy/Zomato aggregator commission fees, and Kasavana & Smith menu matrix classification.
+              </p>
+            </div>
+            
+            <button id="costing-sync-swap-btn" type="button" class="px-4 py-2.5 rounded-xl bg-forest dark:bg-emerald-800 text-ivory text-xs font-black flex items-center gap-2 hover:bg-forest/90 transition shadow-sm self-start lg:self-auto cursor-pointer">
+              <i class="fa-solid fa-arrows-rotate text-terracotta"></i>
+              <span>Sync from Active Substitution Above</span>
+            </button>
+          </div>
+
+          <!-- Recipe Title & Presets -->
+          <div class="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex-1">
+                <label class="block text-[11px] font-black uppercase tracking-wider text-stone-500 mb-1">Dish / Formulation Name</label>
+                <input type="text" id="costing-recipe-name-input" value="${state.costingRecipeName}" placeholder="e.g. Signature Paneer Butter Masala" class="w-full px-3.5 py-2 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta text-sm">
+              </div>
+              <div class="sm:self-end">
+                <span class="block text-[11px] font-bold text-stone-400 mb-1">Culinary Presets:</span>
+                <div class="flex flex-wrap gap-1.5">
+                  <button type="button" class="costing-preset-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-beige-200 dark:border-stone-800 bg-beige/30 dark:bg-stone-900 hover:border-terracotta transition cursor-pointer" data-preset="pbm">Paneer Masala</button>
+                  <button type="button" class="costing-preset-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-beige-200 dark:border-stone-800 bg-beige/30 dark:bg-stone-900 hover:border-terracotta transition cursor-pointer" data-preset="biryani">Veg Biryani</button>
+                  <button type="button" class="costing-preset-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-beige-200 dark:border-stone-800 bg-beige/30 dark:bg-stone-900 hover:border-terracotta transition cursor-pointer" data-preset="arrabbiata">Penne Pasta</button>
+                  <button type="button" class="costing-preset-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-beige-200 dark:border-stone-800 bg-beige/30 dark:bg-stone-900 hover:border-terracotta transition cursor-pointer" data-preset="tofu">Crispy Tofu</button>
+                  <button type="button" class="costing-preset-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-beige-200 dark:border-stone-800 bg-beige/30 dark:bg-stone-900 hover:border-terracotta transition cursor-pointer" data-preset="latte">Cold Brew Latte</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6 Financial & Menu KPI Cards -->
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            
+            <div class="p-4 rounded-2xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between">
+              <span class="text-[10px] font-black uppercase text-stone-400 tracking-wider">Total Batch Cost</span>
+              <div class="my-1.5">
+                <span class="text-xl font-black text-forest dark:text-ivory">${costingRes.currency}${costingRes.total_batch_cost.toFixed(2)}</span>
+              </div>
+              <span class="text-[10px] text-stone-500">${costingRes.portions} portions (incl. AP loss)</span>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-peach/30 dark:bg-stone-900 border border-terracotta/30 dark:border-stone-800 shadow-sm flex flex-col justify-between">
+              <span class="text-[10px] font-black uppercase text-terracotta tracking-wider">Cost / Portion</span>
+              <div class="my-1.5">
+                <span class="text-xl font-black text-forest dark:text-ivory">${costingRes.currency}${costingRes.cost_per_portion.toFixed(2)}</span>
+              </div>
+              <span class="text-[10px] text-stone-500">Pure Food Cost</span>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-sage-50 dark:bg-stone-900 border border-sage-200 dark:border-stone-800 shadow-sm flex flex-col justify-between">
+              <span class="text-[10px] font-black uppercase text-sage-800 dark:text-sage-300 tracking-wider">Rec. Dine-In</span>
+              <div class="my-1.5">
+                <span class="text-xl font-black text-forest dark:text-ivory">${costingRes.currency}${costingRes.recommended_dine_in_price.toFixed(2)}</span>
+              </div>
+              <span class="text-[10px] text-sage-700 dark:text-sage-400 font-bold">${costingRes.target_food_cost_pct}% Target FC</span>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm flex flex-col justify-between">
+              <span class="text-[10px] font-black uppercase text-stone-400 tracking-wider">Gross Margin %</span>
+              <div class="my-1.5">
+                <span class="text-xl font-black ${costingRes.actual_gross_margin_percent >= (100 - costingRes.target_food_cost_pct) ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}">${costingRes.actual_gross_margin_percent}%</span>
+              </div>
+              <span class="text-[10px] text-stone-500">CM: ${costingRes.currency}${costingRes.contribution_margin.toFixed(2)}</span>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 shadow-sm flex flex-col justify-between">
+              <span class="text-[10px] font-black uppercase text-amber-800 dark:text-amber-300 tracking-wider">Rec. Delivery</span>
+              <div class="my-1.5">
+                <span class="text-xl font-black text-amber-700 dark:text-amber-300">${costingRes.currency}${costingRes.recommended_delivery_price.toFixed(2)}</span>
+              </div>
+              <span class="text-[10px] text-stone-500">Protects dine-in profit</span>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-300 dark:border-emerald-800 shadow-sm flex flex-col justify-between">
+              <span class="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 tracking-wider">Net Payout</span>
+              <div class="my-1.5">
+                <span class="text-xl font-black text-emerald-700 dark:text-emerald-300">${costingRes.currency}${costingRes.net_delivery_payout.toFixed(2)}</span>
+              </div>
+              <span class="text-[10px] text-stone-500">After ${costingRes.delivery_commission_percent}% & box</span>
+            </div>
+
+          </div>
+
+          <!-- Kasavana & Smith Matrix -->
+          <div class="p-6 md:p-7 rounded-3xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-beige-200 dark:border-stone-800 pb-3">
+              <div>
+                <span class="text-[10px] font-black uppercase tracking-wider text-terracotta">Menu Engineering</span>
+                <h4 class="text-lg font-black text-forest dark:text-ivory">Kasavana & Smith Matrix Classification</h4>
+              </div>
+              <span class="px-3 py-1 rounded-full text-xs font-black bg-forest/10 dark:bg-stone-800 text-forest dark:text-ivory border border-forest/20">
+                ${costingRes.menu_matrix_badge}
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <!-- Star Quadrant -->
+              <div class="p-4 rounded-2xl border ${costingRes.menu_matrix_class === 'Star' ? 'border-2 border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/40 shadow-md ring-2 ring-emerald-400/30' : 'border-beige-200 dark:border-stone-800 bg-ivory/60 dark:bg-[#181410] opacity-70'}">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-black text-forest dark:text-ivory">🌟 Star</span>
+                  ${costingRes.menu_matrix_class === 'Star' ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500 text-white">Active</span>' : ''}
+                </div>
+                <div class="text-[11px] font-bold text-stone-600 dark:text-stone-400 space-y-0.5">
+                  <p>High Margin + High Volume</p>
+                  <p class="text-[10px] text-stone-400">Protect consistency & feature prominently</p>
+                </div>
+              </div>
+
+              <!-- Plowhorse Quadrant -->
+              <div class="p-4 rounded-2xl border ${costingRes.menu_matrix_class === 'Plowhorse' ? 'border-2 border-blue-500 bg-blue-50/80 dark:bg-blue-950/40 shadow-md ring-2 ring-blue-400/30' : 'border-beige-200 dark:border-stone-800 bg-ivory/60 dark:bg-[#181410] opacity-70'}">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-black text-forest dark:text-ivory">🐎 Plowhorse</span>
+                  ${costingRes.menu_matrix_class === 'Plowhorse' ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500 text-white">Active</span>' : ''}
+                </div>
+                <div class="text-[11px] font-bold text-stone-600 dark:text-stone-400 space-y-0.5">
+                  <p>Low Margin + High Volume</p>
+                  <p class="text-[10px] text-stone-400">Reduce ingredient cost or raise price subtly</p>
+                </div>
+              </div>
+
+              <!-- Puzzle Quadrant -->
+              <div class="p-4 rounded-2xl border ${costingRes.menu_matrix_class === 'Puzzle' ? 'border-2 border-amber-500 bg-amber-50/80 dark:bg-amber-950/40 shadow-md ring-2 ring-amber-400/30' : 'border-beige-200 dark:border-stone-800 bg-ivory/60 dark:bg-[#181410] opacity-70'}">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-black text-forest dark:text-ivory">🧩 Puzzle</span>
+                  ${costingRes.menu_matrix_class === 'Puzzle' ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-white">Active</span>' : ''}
+                </div>
+                <div class="text-[11px] font-bold text-stone-600 dark:text-stone-400 space-y-0.5">
+                  <p>High Margin + Low Volume</p>
+                  <p class="text-[10px] text-stone-400">Promote aggressively, reposition or bundle</p>
+                </div>
+              </div>
+
+              <!-- Dog Quadrant -->
+              <div class="p-4 rounded-2xl border ${costingRes.menu_matrix_class === 'Dog' ? 'border-2 border-rose-500 bg-rose-50/80 dark:bg-rose-950/40 shadow-md ring-2 ring-rose-400/30' : 'border-beige-200 dark:border-stone-800 bg-ivory/60 dark:bg-[#181410] opacity-70'}">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-black text-forest dark:text-ivory">🐕 Dog</span>
+                  ${costingRes.menu_matrix_class === 'Dog' ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500 text-white">Active</span>' : ''}
+                </div>
+                <div class="text-[11px] font-bold text-stone-600 dark:text-stone-400 space-y-0.5">
+                  <p>Low Margin + Low Volume</p>
+                  <p class="text-[10px] text-stone-400">Candidate for removal or total overhaul</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Strategic Action Card -->
+            <div class="p-3.5 rounded-2xl bg-beige/40 dark:bg-stone-900 border border-beige-200 dark:border-stone-800 flex items-start gap-3">
+              <span class="w-8 h-8 rounded-xl bg-terracotta text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                <i class="fa-solid fa-lightbulb"></i>
+              </span>
+              <div>
+                <span class="text-[11px] font-black uppercase text-terracotta tracking-wider">Culinary & Pricing Strategy</span>
+                <p class="text-xs font-semibold text-espresso dark:text-ivory mt-0.5 leading-relaxed">
+                  ${costingRes.menu_matrix_strategy}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive Ingredient Table & Parameters -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left 2 Cols: Ingredient Table -->
+            <div class="lg:col-span-2 p-5 md:p-6 rounded-3xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm space-y-4">
+              <div class="flex items-center justify-between border-b border-beige-200 dark:border-stone-800 pb-3">
+                <div>
+                  <h4 class="text-base font-black text-forest dark:text-ivory flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-terracotta"></i>
+                    <span>Recipe Ingredients (EP vs. AP Yield Matrix)</span>
+                  </h4>
+                  <span class="text-[11px] text-stone-400">Calculates peeling loss, shrinkage buffer, and line item cost contribution</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button type="button" id="costing-add-row-btn" class="px-3 py-1.5 rounded-xl bg-terracotta text-white text-xs font-bold hover:bg-terracotta/90 transition shadow-sm flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add Row</span>
+                  </button>
+                  <button type="button" id="costing-reset-rows-btn" title="Reset Default Ingredients" class="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs font-bold hover:bg-stone-200 transition cursor-pointer">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse min-w-[620px]">
+                  <thead>
+                    <tr class="border-b border-beige-200 dark:border-stone-800 text-[10px] font-black uppercase text-stone-400">
+                      <th class="py-2.5 px-2">Ingredient</th>
+                      <th class="py-2.5 px-1.5 w-24">EP Qty</th>
+                      <th class="py-2.5 px-1.5 w-20">Unit</th>
+                      <th class="py-2.5 px-1.5 w-24">Buy Price (${costingRes.currency})</th>
+                      <th class="py-2.5 px-1.5 w-20">Buy Unit</th>
+                      <th class="py-2.5 px-1.5 w-20">Yield %</th>
+                      <th class="py-2.5 px-2 text-right">AP Qty</th>
+                      <th class="py-2.5 px-2 text-right">Line Cost</th>
+                      <th class="py-2.5 px-1 text-center w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-beige-100 dark:divide-stone-800/60 font-medium">
+                    ${costingRes.ingredients.map((item, idx) => `
+                      <tr class="hover:bg-ivory/50 dark:hover:bg-[#181410] transition">
+                        <td class="py-2 px-1">
+                          <input type="text" data-idx="${idx}" class="costing-field-name w-full px-2 py-1.5 rounded-lg bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta text-xs" value="${item.name}">
+                        </td>
+                        <td class="py-2 px-1">
+                          <input type="number" step="any" min="0" data-idx="${idx}" class="costing-field-ep w-full px-2 py-1.5 rounded-lg bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta text-xs" value="${item.ep_quantity}">
+                        </td>
+                        <td class="py-2 px-1">
+                          <select data-idx="${idx}" class="costing-field-unit w-full px-1.5 py-1.5 rounded-lg bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-bold text-xs focus:outline-none focus:border-terracotta">
+                            <option value="g" ${item.unit === 'g' ? 'selected' : ''}>g</option>
+                            <option value="kg" ${item.unit === 'kg' ? 'selected' : ''}>kg</option>
+                            <option value="ml" ${item.unit === 'ml' ? 'selected' : ''}>ml</option>
+                            <option value="l" ${item.unit === 'l' ? 'selected' : ''}>l</option>
+                            <option value="pcs" ${item.unit === 'pcs' ? 'selected' : ''}>pcs</option>
+                            <option value="tbsp" ${item.unit === 'tbsp' ? 'selected' : ''}>tbsp</option>
+                            <option value="tsp" ${item.unit === 'tsp' ? 'selected' : ''}>tsp</option>
+                          </select>
+                        </td>
+                        <td class="py-2 px-1">
+                          <input type="number" step="any" min="0" data-idx="${idx}" class="costing-field-price w-full px-2 py-1.5 rounded-lg bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta text-xs" value="${item.purchase_price}">
+                        </td>
+                        <td class="py-2 px-1">
+                          <select data-idx="${idx}" class="costing-field-punit w-full px-1.5 py-1.5 rounded-lg bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-bold text-xs focus:outline-none focus:border-terracotta">
+                            <option value="kg" ${item.purchase_unit === 'kg' ? 'selected' : ''}>/ kg</option>
+                            <option value="l" ${item.purchase_unit === 'l' ? 'selected' : ''}>/ l</option>
+                            <option value="pcs" ${item.purchase_unit === 'pcs' ? 'selected' : ''}>/ pcs</option>
+                            <option value="g" ${item.purchase_unit === 'g' ? 'selected' : ''}>/ g</option>
+                            <option value="ml" ${item.purchase_unit === 'ml' ? 'selected' : ''}>/ ml</option>
+                          </select>
+                        </td>
+                        <td class="py-2 px-1">
+                          <input type="number" step="1" min="1" max="100" data-idx="${idx}" class="costing-field-yield w-full px-2 py-1.5 rounded-lg bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta text-xs" value="${item.yield_percent}">
+                        </td>
+                        <td class="py-2 px-2 text-right font-mono font-semibold text-stone-600 dark:text-stone-300">
+                          ${item.ap_quantity} ${item.ap_unit}
+                        </td>
+                        <td class="py-2 px-2 text-right">
+                          <div class="font-mono font-bold text-forest dark:text-ivory">${costingRes.currency}${item.cost.toFixed(2)}</div>
+                          <div class="text-[9px] text-stone-400">${item.cost_share_percent}% share</div>
+                        </td>
+                        <td class="py-2 px-1 text-center">
+                          <button type="button" data-idx="${idx}" class="costing-row-delete text-stone-400 hover:text-rose-500 transition p-1 cursor-pointer">
+                            <i class="fa-solid fa-trash-can"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="p-3 rounded-xl bg-beige/30 dark:bg-stone-900 border border-beige-200 dark:border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
+                <span class="text-stone-600 dark:text-stone-400 font-bold">
+                  Active Formulation: <span class="font-black text-forest dark:text-ivory">${costingRes.ingredients.length} items</span>
+                </span>
+                <span class="text-stone-600 dark:text-stone-400 font-bold">
+                  Total Batch Raw Food Cost: <span class="font-mono font-black text-terracotta text-sm">${costingRes.currency}${costingRes.total_batch_cost.toFixed(2)}</span>
+                </span>
+              </div>
+            </div>
+
+            <!-- Right 1 Col: Kitchen & Pricing Parameters -->
+            <div class="p-5 md:p-6 rounded-3xl bg-white dark:bg-[#1f1a16] border border-beige-200 dark:border-stone-800 shadow-sm space-y-4">
+              <div class="border-b border-beige-200 dark:border-stone-800 pb-3">
+                <h4 class="text-base font-black text-forest dark:text-ivory flex items-center gap-2">
+                  <i class="fa-solid fa-sliders text-terracotta"></i>
+                  <span>Pricing & Yield Controls</span>
+                </h4>
+                <span class="text-[11px] text-stone-400">Calibrate restaurant operational margins</span>
+              </div>
+
+              <div class="space-y-4 text-xs">
+                
+                <!-- Portions -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="font-bold text-stone-700 dark:text-stone-300">Batch Yield (Portions / Servings):</label>
+                    <span class="font-mono font-black text-terracotta">${state.costingPortions} Servings</span>
+                  </div>
+                  <input type="number" min="1" max="500" id="costing-portions-ctrl" value="${state.costingPortions}" class="w-full px-3 py-2 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta">
+                </div>
+
+                <!-- Shrinkage & Trimming Buffer -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="font-bold text-stone-700 dark:text-stone-300">Shrinkage & Trimming Buffer:</label>
+                    <span class="font-mono font-bold text-forest dark:text-ivory">${state.costingShrinkageBuffer}%</span>
+                  </div>
+                  <input type="range" min="0" max="20" step="0.5" id="costing-shrinkage-ctrl" value="${state.costingShrinkageBuffer}" class="w-full accent-terracotta cursor-pointer">
+                  <span class="text-[10px] text-stone-400">Cooking evaporation & trimming loss</span>
+                </div>
+
+                <!-- Target Food Cost % -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="font-bold text-stone-700 dark:text-stone-300">Target Food Cost %:</label>
+                    <span class="font-mono font-bold text-forest dark:text-ivory">${state.costingTargetFoodCostPct}%</span>
+                  </div>
+                  <input type="range" min="15" max="45" step="1" id="costing-target-fc-ctrl" value="${state.costingTargetFoodCostPct}" class="w-full accent-terracotta cursor-pointer">
+                  <span class="text-[10px] text-stone-400">Dine-in benchmark: 28%–35% (GM: ${100 - state.costingTargetFoodCostPct}%)</span>
+                </div>
+
+                <!-- Actual Selling Price -->
+                <div>
+                  <label class="block font-bold text-stone-700 dark:text-stone-300 mb-1">Actual Menu Selling Price (${costingRes.currency}):</label>
+                  <input type="number" step="any" min="0" id="costing-selling-price-ctrl" value="${state.costingActualSellingPrice}" class="w-full px-3 py-2 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta">
+                  <span class="text-[10px] text-stone-400">Current dine-in menu price per portion</span>
+                </div>
+
+                <!-- Packaging Cost -->
+                <div>
+                  <label class="block font-bold text-stone-700 dark:text-stone-300 mb-1">Delivery Packaging / Portion (${costingRes.currency}):</label>
+                  <input type="number" step="any" min="0" id="costing-pkg-ctrl" value="${state.costingPackagingCost}" class="w-full px-3 py-2 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-mono font-bold text-forest dark:text-ivory focus:outline-none focus:border-terracotta">
+                </div>
+
+                <!-- Aggregator Commission % -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="font-bold text-stone-700 dark:text-stone-300">Delivery Commission (Swiggy/Zomato):</label>
+                    <span class="font-mono font-bold text-forest dark:text-ivory">${state.costingDeliveryCommissionPct}%</span>
+                  </div>
+                  <input type="range" min="0" max="35" step="1" id="costing-comm-ctrl" value="${state.costingDeliveryCommissionPct}" class="w-full accent-terracotta cursor-pointer">
+                </div>
+
+                <!-- Popularity Level for Menu Matrix -->
+                <div>
+                  <label class="block font-bold text-stone-700 dark:text-stone-300 mb-1">Sales Volume Level (Matrix):</label>
+                  <select id="costing-popularity-ctrl" class="w-full px-3 py-2 rounded-xl bg-ivory dark:bg-[#181410] border border-beige-200 dark:border-stone-800 font-bold text-xs focus:outline-none focus:border-terracotta cursor-pointer">
+                    <option value="high" ${state.costingPopularity === 'high' ? 'selected' : ''}>High Volume (Top Seller / Crowd Favorite)</option>
+                    <option value="low" ${state.costingPopularity === 'low' ? 'selected' : ''}>Low Volume (Niche / Special Order)</option>
+                  </select>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
         <!-- ============================================== -->
-        <!-- 5. PREVIOUS COST & MARGIN CALCULATOR (PRESERVED)-->
+        <!-- 6. PREVIOUS COST & MARGIN CALCULATOR (PRESERVED)-->
         <!-- ============================================== -->
         <div class="space-y-6 pt-4 border-t border-beige-200/80 dark:border-stone-800">
           
@@ -4287,6 +4784,187 @@
       const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
       setTxt('dash-out-revenue', legacy.revenueTotal);
       setTxt('dash-out-margin', legacy.altMargin);
+    });
+
+    // ========================================================
+    // OPENKITCHEN COSTING & MENU MATRIX EVENT LISTENERS
+    // ========================================================
+    // Recipe Title
+    document.getElementById('costing-recipe-name-input')?.addEventListener('input', (e) => {
+      state.costingRecipeName = e.target.value;
+    });
+
+    // Presets
+    document.querySelectorAll('.costing-preset-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pKey = btn.getAttribute('data-preset');
+        if (COSTING_PRESETS[pKey]) {
+          const p = COSTING_PRESETS[pKey];
+          state.costingRecipeName = p.name;
+          state.costingPortions = p.portions;
+          state.costingTargetFoodCostPct = p.targetFoodCostPct;
+          state.costingActualSellingPrice = p.actualSellingPrice;
+          state.costingPackagingCost = p.packagingCost;
+          state.costingDeliveryCommissionPct = p.deliveryCommissionPct;
+          state.costingPopularity = p.popularity;
+          state.costingIngredients = JSON.parse(JSON.stringify(p.ingredients));
+          renderDashboardView();
+        }
+      });
+    });
+
+    // Sync from Substitution
+    document.getElementById('costing-sync-swap-btn')?.addEventListener('click', () => {
+      state.costingRecipeName = `${state.dashDishName} (with ${state.dashReplacementIng})`;
+      state.costingPortions = state.dashboardCovers || 10;
+      state.costingActualSellingPrice = parseFloat(state.dashRetailPrice) || 320;
+      const mod = state.dashAnalysisResult?.modified;
+      if (mod) {
+        const existingIdx = state.costingIngredients.findIndex(i =>
+          i.name.toLowerCase().includes((state.dashMissingIng || '').toLowerCase()) ||
+          i.name.toLowerCase().includes((state.dashReplacementIng || '').toLowerCase())
+        );
+        const newIng = {
+          name: `${state.dashReplacementIng} (${mod.ingredient})`,
+          ep_quantity: Math.round(mod.total_quantity || (mod.quantity_per_person * state.costingPortions)),
+          unit: mod.unit === 'g' ? 'g' : (mod.unit === 'ml' ? 'ml' : 'g'),
+          purchase_price: mod.unit_cost_per_kg || 180,
+          purchase_unit: 'kg',
+          yield_pct: 95
+        };
+        if (existingIdx >= 0) {
+          state.costingIngredients[existingIdx] = newIng;
+        } else {
+          state.costingIngredients.unshift(newIng);
+        }
+      }
+      renderDashboardView();
+    });
+
+    // Add Row
+    document.getElementById('costing-add-row-btn')?.addEventListener('click', () => {
+      state.costingIngredients.push({
+        name: 'New Culinary Ingredient',
+        ep_quantity: 200,
+        unit: 'g',
+        purchase_price: 150,
+        purchase_unit: 'kg',
+        yield_pct: 90
+      });
+      renderDashboardView();
+    });
+
+    // Reset Rows
+    document.getElementById('costing-reset-rows-btn')?.addEventListener('click', () => {
+      state.costingIngredients = JSON.parse(JSON.stringify(COSTING_PRESETS['pbm'].ingredients));
+      renderDashboardView();
+    });
+
+    // Delete Row
+    document.querySelectorAll('.costing-row-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx'), 10);
+        if (!isNaN(idx) && state.costingIngredients.length > 1) {
+          state.costingIngredients.splice(idx, 1);
+          renderDashboardView();
+        }
+      });
+    });
+
+    // Ingredient Field Inputs
+    document.querySelectorAll('.costing-field-name').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-idx'), 10);
+        if (state.costingIngredients[idx]) {
+          state.costingIngredients[idx].name = e.target.value.trim() || 'Ingredient';
+        }
+      });
+    });
+
+    document.querySelectorAll('.costing-field-ep').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-idx'), 10);
+        if (state.costingIngredients[idx]) {
+          state.costingIngredients[idx].ep_quantity = parseFloat(e.target.value) || 0;
+          renderDashboardView();
+        }
+      });
+    });
+
+    document.querySelectorAll('.costing-field-unit').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-idx'), 10);
+        if (state.costingIngredients[idx]) {
+          state.costingIngredients[idx].unit = e.target.value;
+          renderDashboardView();
+        }
+      });
+    });
+
+    document.querySelectorAll('.costing-field-price').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-idx'), 10);
+        if (state.costingIngredients[idx]) {
+          state.costingIngredients[idx].purchase_price = parseFloat(e.target.value) || 0;
+          renderDashboardView();
+        }
+      });
+    });
+
+    document.querySelectorAll('.costing-field-punit').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-idx'), 10);
+        if (state.costingIngredients[idx]) {
+          state.costingIngredients[idx].purchase_unit = e.target.value;
+          renderDashboardView();
+        }
+      });
+    });
+
+    document.querySelectorAll('.costing-field-yield').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-idx'), 10);
+        if (state.costingIngredients[idx]) {
+          state.costingIngredients[idx].yield_percent = Math.min(100, Math.max(1, parseFloat(e.target.value) || 100));
+          renderDashboardView();
+        }
+      });
+    });
+
+    // Control Sliders and Inputs
+    document.getElementById('costing-portions-ctrl')?.addEventListener('change', (e) => {
+      state.costingPortions = Math.max(1, parseInt(e.target.value, 10) || 1);
+      renderDashboardView();
+    });
+
+    document.getElementById('costing-shrinkage-ctrl')?.addEventListener('input', (e) => {
+      state.costingShrinkageBuffer = Math.max(0, parseFloat(e.target.value) || 0);
+      renderDashboardView();
+    });
+
+    document.getElementById('costing-target-fc-ctrl')?.addEventListener('input', (e) => {
+      state.costingTargetFoodCostPct = Math.max(5, Math.min(90, parseFloat(e.target.value) || 30));
+      renderDashboardView();
+    });
+
+    document.getElementById('costing-selling-price-ctrl')?.addEventListener('change', (e) => {
+      state.costingActualSellingPrice = Math.max(0, parseFloat(e.target.value) || 0);
+      renderDashboardView();
+    });
+
+    document.getElementById('costing-pkg-ctrl')?.addEventListener('change', (e) => {
+      state.costingPackagingCost = Math.max(0, parseFloat(e.target.value) || 0);
+      renderDashboardView();
+    });
+
+    document.getElementById('costing-comm-ctrl')?.addEventListener('input', (e) => {
+      state.costingDeliveryCommissionPct = Math.max(0, Math.min(50, parseFloat(e.target.value) || 0));
+      renderDashboardView();
+    });
+
+    document.getElementById('costing-popularity-ctrl')?.addEventListener('change', (e) => {
+      state.costingPopularity = e.target.value;
+      renderDashboardView();
     });
   }
 
