@@ -4902,7 +4902,7 @@ const ApiService = (function () {
         parameter: 'Cost',
         original: `${currency}${origTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         modified: `${currency}${replTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        difference: `${costDiff > 0 ? '+' : ''}${currency}${costDiff.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${costDiffPct > 0 ? '+' : ''}${costDiffPct}%)`,
+        difference: `${costDiff < 0 ? '-' : (costDiff > 0 ? '+' : '')}${currency}${Math.abs(costDiff).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${costDiffPct > 0 ? '+' : ''}${costDiffPct}%)`,
         indicator: costDiff < -0.01 ? 'green' : (costDiff > 0.01 ? 'red' : 'neutral'),
         explanation: costDiff < -0.01
           ? `Cost reduced by ${currency}${Math.abs(costDiff).toFixed(2)} (${Math.abs(costDiffPct)}%) across ${persons} servings due to more economical replacement.`
@@ -4942,7 +4942,7 @@ const ApiService = (function () {
         parameter: 'Cost Per Person',
         original: `${currency}${origCostPp.toFixed(2)}`,
         modified: `${currency}${replCostPp.toFixed(2)}`,
-        difference: `${costPpDiff > 0 ? '+' : ''}${currency}${costPpDiff.toFixed(2)} (${costPpPct > 0 ? '+' : ''}${costPpPct}%)`,
+        difference: `${costPpDiff < 0 ? '-' : (costPpDiff > 0 ? '+' : '')}${currency}${Math.abs(costPpDiff).toFixed(2)} (${costPpPct > 0 ? '+' : ''}${costPpPct}%)`,
         indicator: costPpDiff < -0.01 ? 'green' : (costPpDiff > 0.01 ? 'red' : 'neutral'),
         explanation: costPpDiff < -0.01
           ? `Savings of ${currency}${Math.abs(costPpDiff).toFixed(2)} per portion (${Math.abs(costPpPct)}% reduction in plate cost).`

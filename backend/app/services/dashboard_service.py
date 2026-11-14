@@ -566,7 +566,7 @@ def analyze_substitution(req: SubstitutionAnalysisRequest) -> SubstitutionAnalys
         parameter="Cost",
         original=f"{currency}{orig_total_cost:,.2f}",
         modified=f"{currency}{repl_total_cost:,.2f}",
-        difference=f"{'+' if cost_diff > 0 else ''}{currency}{cost_diff:,.2f} ({cost_diff_pct:+.1f}%)",
+        difference=f"{'+' if cost_diff > 0 else ('-' if cost_diff < 0 else '')}{currency}{abs(cost_diff):,.2f} ({cost_diff_pct:+.1f}%)",
         indicator=cost_ind,
         explanation=cost_exp,
     ))
@@ -635,7 +635,7 @@ def analyze_substitution(req: SubstitutionAnalysisRequest) -> SubstitutionAnalys
         parameter="Cost Per Person",
         original=f"{currency}{orig_cost_pp:,.2f}",
         modified=f"{currency}{repl_cost_pp:,.2f}",
-        difference=f"{'+' if cost_pp_diff > 0 else ''}{currency}{cost_pp_diff:,.2f} ({cost_pp_pct:+.1f}%)",
+        difference=f"{'+' if cost_pp_diff > 0 else ('-' if cost_pp_diff < 0 else '')}{currency}{abs(cost_pp_diff):,.2f} ({cost_pp_pct:+.1f}%)",
         indicator=cpp_ind,
         explanation=cpp_exp,
     ))
